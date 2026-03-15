@@ -1,0 +1,3 @@
+-- Placeholder for a migration that already exists in the shared remote Supabase project.
+-- This repository does not own the original SQL for version 20260211110000.
+-- Keep this file so Supabase CLI can align local and remote migration histories safely.

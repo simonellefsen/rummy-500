@@ -28,6 +28,19 @@ This project assumes Supabase is shared with other applications, so migration sa
 - Only after confirming no active dependency remains, remove obsolete columns or functions in a later migration.
 - For shared environments, keep destructive contract migrations manual and separately reviewed.
 
+## Shared migration history bootstrap
+
+When this repository starts using a Supabase project that already has migration history from other applications, do not run `supabase migration repair --status reverted ...` just to satisfy this repo.
+
+Instead:
+
+1. Keep the remote history intact.
+2. Add local placeholder files for the pre-existing remote versions that this repository does not own.
+3. Commit those placeholders so every checkout has the same migration history view.
+4. Only then run `supabase db push` to apply the new `rummy500` migrations.
+
+These placeholder files are no-op SQL files whose only purpose is to let Supabase CLI align local and remote histories safely in a shared database.
+
 ## Supabase CLI guidance
 
 - Safe remote default: `supabase db push`
