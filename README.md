@@ -158,10 +158,12 @@ Environment variables used by the app
 
 - `SUPABASE_URL`
 - `SUPABASE_PUBLISHABLE_KEY`
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `SUPABASE_DB_URL`
 
-`next.config.ts` maps the public Supabase values into browser-safe `NEXT_PUBLIC_*` values at build time, so the app works with the shared `.env` naming in this repository.
+For Vercel deployments, set `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` explicitly. The browser bundle cannot rely on private env names like `SUPABASE_URL` at runtime.
 
 Initial shared-database migration
 
