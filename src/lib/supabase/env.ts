@@ -2,18 +2,14 @@ function isBrowser() {
   return typeof window !== "undefined";
 }
 
-function resolvePublicEnvValue(primaryKey: string, fallbackKey?: string): string | undefined {
-  if (isBrowser()) {
-    return process.env[primaryKey];
-  }
-
-  return process.env[primaryKey] ?? (fallbackKey ? process.env[fallbackKey] : undefined);
-}
-
 export function getPublicSupabaseEnv() {
   const values = {
-    url: resolvePublicEnvValue("NEXT_PUBLIC_SUPABASE_URL", "SUPABASE_URL"),
-    anonKey: resolvePublicEnvValue("NEXT_PUBLIC_SUPABASE_ANON_KEY", "SUPABASE_PUBLISHABLE_KEY")
+    url: isBrowser()
+      ? process.env.NEXT_PUBLIC_SUPABASE_URL
+      : process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL,
+    anonKey: isBrowser()
+      ? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+      : process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? process.env.SUPABASE_PUBLISHABLE_KEY
   };
 
   if (!values.url) {
