@@ -1,0 +1,6 @@
+project_id = "rummy500-local"
+
+[api]
+enabled = true
+schemas = ["public", "storage", "graphql_public", "rummy500"]
+extra_search_path = ["public", "extensions", "rummy500"]
