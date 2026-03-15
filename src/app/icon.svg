@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <defs>
+    <linearGradient id="bg" x1="32" x2="224" y1="24" y2="232" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#133847" />
+      <stop offset="1" stop-color="#07151e" />
+    </linearGradient>
+    <linearGradient id="cardFace" x1="74" x2="176" y1="54" y2="186" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#fff9ef" />
+      <stop offset="1" stop-color="#f0e7d2" />
+    </linearGradient>
+    <linearGradient id="chip" x1="150" x2="206" y1="150" y2="206" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#f2cb77" />
+      <stop offset="1" stop-color="#c58d33" />
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="10" flood-color="#021018" flood-opacity=".35" stdDeviation="8" />
+    </filter>
+  </defs>
+
+  <rect width="256" height="256" rx="56" fill="url(#bg)" />
+  <path
+    d="M36 196c18-42 48-67 90-74 39-7 69-2 94 16"
+    fill="none"
+    opacity=".18"
+    stroke="#f2cb77"
+    stroke-linecap="round"
+    stroke-width="10"
+  />
+
+  <g filter="url(#shadow)">
+    <rect
+      width="88"
+      height="124"
+      x="54"
+      y="66"
+      rx="14"
+      fill="#dbe7df"
+      opacity=".88"
+      transform="rotate(-14 98 128)"
+    />
+    <rect
+      width="88"
+      height="124"
+      x="116"
+      y="64"
+      rx="14"
+      fill="#dbe7df"
+      opacity=".9"
+      transform="rotate(14 160 126)"
+    />
+    <rect width="98" height="136" x="79" y="52" rx="16" fill="url(#cardFace)" />
+  </g>
+
+  <g fill="#b43c33">
+    <path d="M110 84c-8 0-15 6-15 15 0 13 15 24 24 31 9-7 24-18 24-31 0-9-7-15-15-15-5 0-9 2-12 7-3-5-7-7-12-7Z" />
+    <path d="M113 136h30l-15-26z" />
+    <rect width="10" height="20" x="123" y="136" rx="5" />
+  </g>
+
+  <g fill="url(#chip)" filter="url(#shadow)">
+    <circle cx="181" cy="181" r="33" />
+  </g>
+  <circle cx="181" cy="181" r="24" fill="none" opacity=".75" stroke="#fff5db" stroke-dasharray="4 8" stroke-width="4" />
+  <text
+    x="181"
+    y="188"
+    fill="#fff7e5"
+    font-family="'Trebuchet MS', 'Gill Sans', sans-serif"
+    font-size="22"
+    font-weight="700"
+    text-anchor="middle"
+  >
+    500
+  </text>
+</svg>
