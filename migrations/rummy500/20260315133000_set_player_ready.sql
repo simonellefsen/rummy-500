@@ -1,5 +1,3 @@
-begin;
-
 create or replace function rummy500.set_player_ready(p_game_id uuid, p_ready boolean)
 returns void
 language plpgsql
@@ -42,5 +40,3 @@ end;
 $$;
 
 grant execute on function rummy500.set_player_ready(uuid, boolean) to authenticated, service_role;
-
-commit;

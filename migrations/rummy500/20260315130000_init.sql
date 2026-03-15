@@ -1,5 +1,4 @@
-begin;
-
+create schema if not exists extensions;
 create extension if not exists pgcrypto with schema extensions;
 
 create schema if not exists rummy500;
@@ -333,6 +332,7 @@ on rummy500.game_players
 for select
 to authenticated
 using (rummy500.is_game_participant(game_id));
+
 drop policy if exists "game_rounds_select_participants" on rummy500.game_rounds;
 create policy "game_rounds_select_participants"
 on rummy500.game_rounds
@@ -353,5 +353,3 @@ on rummy500.game_actions
 for select
 to authenticated
 using (rummy500.is_game_participant(game_id));
-
-commit;

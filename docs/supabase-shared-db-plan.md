@@ -5,11 +5,19 @@ This project assumes Supabase is shared with other applications, so migration sa
 ## Rules
 
 1. Keep all application tables, types, functions, and policies in the `rummy500` schema.
-2. Treat the first rollout as additive only. No `drop table`, `drop schema`, `truncate`, or remote reset commands.
-3. Prefer idempotent SQL: `create schema if not exists`, `create table if not exists`, `add column if not exists`.
-4. Use expand, migrate, contract for every breaking schema change.
-5. Do not run `supabase db reset` against a shared remote database. Restrict resets to disposable local stacks only.
-6. Do not trust generated diffs blindly. Review them for destructive SQL before they are committed.
+2. Keep migration tracking for this app in `rummy500_meta.migrations`, not in `supabase_migrations.schema_migrations`.
+3. Treat the first rollout as additive only. No `drop table`, `drop schema`, `truncate`, or remote reset commands.
+4. Prefer idempotent SQL: `create schema if not exists`, `create table if not exists`, `add column if not exists`.
+5. Use expand, migrate, contract for every breaking schema change.
+6. Do not run `supabase db reset` against a shared remote database. Restrict resets to disposable local stacks only.
+7. Do not trust generated diffs blindly. Review them for destructive SQL before they are committed.
+
+## Migration runner guidance
+
+- Safe remote default: `npm run migrate:rummy500`
+- Dry run / pending view: `npm run migrate:rummy500:plan`
+- Local-only reset: `supabase db reset`
+- Review before commit: inspect every file in `migrations/rummy500`
 
 ## Change process
 
@@ -28,24 +36,18 @@ This project assumes Supabase is shared with other applications, so migration sa
 - Only after confirming no active dependency remains, remove obsolete columns or functions in a later migration.
 - For shared environments, keep destructive contract migrations manual and separately reviewed.
 
-## Shared migration history bootstrap
+## Why this avoids shared-history collisions
 
-When this repository starts using a Supabase project that already has migration history from other applications, do not run `supabase migration repair --status reverted ...` just to satisfy this repo.
+This repository no longer depends on Supabase CLI’s global migration ledger for remote rollout.
 
 Instead:
 
-1. Keep the remote history intact.
-2. Add local placeholder files for the pre-existing remote versions that this repository does not own.
-3. Commit those placeholders so every checkout has the same migration history view.
-4. Only then run `supabase db push` to apply the new `rummy500` migrations.
+1. The runner reads `migrations/rummy500/*.sql`.
+2. It acquires an advisory lock scoped to the `rummy500` app.
+3. It wraps each migration in a transaction.
+4. It records version + checksum in `rummy500_meta.migrations`.
 
-These placeholder files are no-op SQL files whose only purpose is to let Supabase CLI align local and remote histories safely in a shared database.
-
-## Supabase CLI guidance
-
-- Safe remote default: `supabase db push`
-- Local-only reset: `supabase db reset`
-- Review before commit: inspect every file in `supabase/migrations`
+That means another project can keep its own migration ledger, such as `otherapp_meta.migrations`, without either repo needing to mirror the other repo’s migration history.
 
 ## Why a dedicated schema matters
 

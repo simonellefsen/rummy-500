@@ -7,12 +7,15 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "migrate:rummy500": "node scripts/run-app-migrations.mjs rummy500",
+    "migrate:rummy500:plan": "node scripts/run-app-migrations.mjs rummy500 --plan",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.4",
     "next": "^15.0.0",
+    "pg": "^8.13.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "zod": "^3.24.2"

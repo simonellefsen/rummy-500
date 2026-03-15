@@ -8,7 +8,7 @@ This repository now contains the first implementation slice for the game describ
 - Authenticated dashboard for guest, Google, and email-link sign-in.
 - Lobby route for ready-state changes, invite-code sharing, and starting the first round.
 - Domain model for cards, deck setup, dealing, meld validation, and scoring.
-- Initial Supabase schema and RPC primitives isolated inside the `rummy500` schema.
+- App-owned SQL migrations under `migrations/rummy500` with a custom runner and `rummy500_meta.migrations` ledger.
 - A start-game Edge Function that can deal the opening round from a server-trusted deck.
 - Reduced direct table writes for authenticated clients so lobby creation and joins flow through RPCs first.
 
@@ -16,6 +16,6 @@ This repository now contains the first implementation slice for the game describ
 
 1. Replace the polling-based lobby refresh with Supabase Realtime subscriptions.
 2. Implement a `submit-turn-action` Edge Function to handle draw, meld, layoff, and discard atomically.
-3. Split the current round UI into a proper table view with meld areas, discard stack history, and turn controls.
-4. Add integration tests that exercise migrations and server-authoritative turn execution.
+3. Add migration verification tests against a disposable Postgres or Supabase test database.
+4. Split the current round UI into a proper table view with meld areas, discard stack history, and turn controls.
 5. Add chat, host moderation, and configurable rule variants once the turn engine is in place.

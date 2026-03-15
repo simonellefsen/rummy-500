@@ -134,7 +134,8 @@ The first implementation slice is now in the repository:
 
 - Next.js app scaffold under `src/app`
 - Rummy rules engine under `src/lib/rummy`
-- Supabase shared-schema migration baseline under `supabase/migrations`
+- App-owned migration runner under `scripts/run-app-migrations.mjs`
+- Rummy 500 SQL migrations under `migrations/rummy500`
 - Start-game Edge Function under `supabase/functions/start-game`
 - Authenticated dashboard on `/` and lobby route on `/games/[gameId]`
 
@@ -142,8 +143,8 @@ Important Supabase safety rule:
 
 - This project uses a dedicated `rummy500` schema and additive migrations only.
 - Do not run remote reset workflows against a shared Supabase database.
+- Do not use `supabase db push` as the remote migration owner for this repo.
 - Review `docs/supabase-shared-db-plan.md` before applying future migrations.
-- If the shared remote already has migration versions from sibling projects, keep matching local placeholder files instead of repairing those versions away.
 
 Getting started
 
@@ -151,6 +152,7 @@ Getting started
 2. Install dependencies with `pnpm install`.
 3. Start the app with `pnpm dev`.
 4. Run checks with `pnpm test`, `pnpm typecheck`, and `pnpm build`.
+5. Apply database changes with `npm run migrate:rummy500`.
 
 Environment variables used by the app
 
@@ -163,6 +165,7 @@ Environment variables used by the app
 
 Initial shared-database migration
 
-1. Load the shared Supabase environment variables.
-2. Run `supabase db push --db-url "$SUPABASE_DB_URL"`.
-3. If Supabase reports remote versions from sibling projects, add matching local placeholder migration files rather than repairing those versions out of the shared database.
+1. Load `.env` or `.env.local` with `SUPABASE_DB_URL`.
+2. Run `npm run migrate:rummy500`.
+3. Use `npm run migrate:rummy500:plan` to see pending or drifted migrations without applying them.
+4. Keep using Supabase CLI for local helpers and Edge Function deploys, not as the remote migration owner.
