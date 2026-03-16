@@ -80,24 +80,24 @@ Deno.serve(async (request) => {
       return Response.json({ error: "Missing authorization header." }, { status: 401, headers: corsHeaders });
     }
 
+    const accessToken = authHeader.replace(/^Bearer\s+/iu, "").trim();
+
+    if (!accessToken) {
+      return Response.json({ error: "Invalid authorization header." }, { status: 401, headers: corsHeaders });
+    }
+
     const body = (await request.json()) as { gameId?: string };
 
     if (!body.gameId) {
       return Response.json({ error: "gameId is required." }, { status: 400, headers: corsHeaders });
     }
 
-    const supabase = createClient(supabaseUrl, serviceRoleKey, {
-      global: {
-        headers: {
-          Authorization: authHeader
-        }
-      }
-    });
+    const supabase = createClient(supabaseUrl, serviceRoleKey);
 
     const {
       data: { user },
       error: authError
-    } = await supabase.auth.getUser();
+    } = await supabase.auth.getUser(accessToken);
 
     if (authError || !user) {
       return Response.json({ error: "Not authenticated." }, { status: 401, headers: corsHeaders });

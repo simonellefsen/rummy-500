@@ -4,3 +4,6 @@ project_id = "rummy500-local"
 enabled = true
 schemas = ["public", "storage", "graphql_public", "rummy500"]
 extra_search_path = ["public", "extensions", "rummy500"]
+
+[functions.start-game]
+verify_jwt = false
