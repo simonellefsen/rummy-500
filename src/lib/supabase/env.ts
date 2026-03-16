@@ -40,3 +40,7 @@ export function getServiceRoleKey(): string {
 
   return key;
 }
+
+export function getPublicGoogleClientId(): string | undefined {
+  return process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ?? process.env.GOOGLE_CLIENT_ID;
+}

@@ -2,10 +2,12 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState, useTransition } from "react";
+import Script from "next/script";
+import { useEffect, useRef, useState, useTransition } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 
 import { createBrowserSupabaseClient } from "../lib/supabase/client";
+import { getPublicGoogleClientId } from "../lib/supabase/env";
 
 interface DashboardGame {
   id: string;
@@ -115,9 +117,9 @@ async function loadDashboard(userId: string) {
 
 export function HomeConsole() {
   const router = useRouter();
+  const googleButtonRef = useRef<HTMLDivElement | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [displayName, setDisplayName] = useState("");
-  const [email, setEmail] = useState("");
   const [guestName, setGuestName] = useState(createGuestName);
   const [joinCode, setJoinCode] = useState("");
   const [maxPlayers, setMaxPlayers] = useState(4);
@@ -125,7 +127,9 @@ export function HomeConsole() {
   const [loading, setLoading] = useState(true);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [googleReady, setGoogleReady] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const googleClientId = getPublicGoogleClientId();
 
   useEffect(() => {
     let isActive = true;
@@ -204,6 +208,69 @@ export function HomeConsole() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!googleReady || !googleClientId || session?.user || !window.google) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const handleGoogleCredential = async (response: { credential: string }) => {
+      if (cancelled) {
+        return;
+      }
+
+      setErrorMessage(null);
+      setStatusMessage(null);
+
+      const { error } = await supabase.auth.signInWithIdToken({
+        provider: "google",
+        token: response.credential
+      });
+
+      if (error) {
+        setErrorMessage(error.message);
+        return;
+      }
+
+      setStatusMessage("Signed in with Google.");
+    };
+
+    window.google.accounts.id.initialize({
+      client_id: googleClientId,
+      callback: (response) => {
+        void handleGoogleCredential(response);
+      },
+      auto_select: false,
+      cancel_on_tap_outside: false,
+      use_fedcm_for_prompt: true,
+      context: "signin"
+    });
+
+    if (googleButtonRef.current) {
+      googleButtonRef.current.innerHTML = "";
+      window.google.accounts.id.renderButton(googleButtonRef.current, {
+        theme: "filled_black",
+        size: "large",
+        text: "continue_with",
+        shape: "pill",
+        width: 280,
+        logo_alignment: "left"
+      });
+    }
+
+    window.google.accounts.id.prompt((notification) => {
+      if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
+        setStatusMessage("Google One Tap is unavailable in this browser; use the Google button below.");
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      window.google?.accounts.id.cancel();
+    };
+  }, [googleClientId, googleReady, session?.user]);
+
   function normalizeCode(value: string) {
     return value.replace(/\s+/g, "").toUpperCase();
   }
@@ -272,41 +339,6 @@ export function HomeConsole() {
     setStatusMessage("Signed in as guest.");
   }
 
-  async function sendMagicLink() {
-    setErrorMessage(null);
-    setStatusMessage(null);
-
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: {
-        emailRedirectTo: window.location.origin
-      }
-    });
-
-    if (error) {
-      setErrorMessage(error.message);
-      return;
-    }
-
-    setStatusMessage(`Magic link sent to ${email}.`);
-  }
-
-  async function signInWithGoogle() {
-    setErrorMessage(null);
-    setStatusMessage(null);
-
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: window.location.origin
-      }
-    });
-
-    if (error) {
-      setErrorMessage(error.message);
-    }
-  }
-
   async function createGame() {
     setErrorMessage(null);
     setStatusMessage(null);
@@ -365,6 +397,7 @@ export function HomeConsole() {
       return;
     }
 
+    window.google?.accounts.id.disableAutoSelect();
     setStatusMessage("Signed out.");
   }
 
@@ -372,6 +405,14 @@ export function HomeConsole() {
 
   return (
     <section className="grid interactive-grid">
+      {!user && googleClientId ? (
+        <Script
+          onLoad={() => setGoogleReady(true)}
+          src="https://accounts.google.com/gsi/client"
+          strategy="afterInteractive"
+        />
+      ) : null}
+
       <article className="panel auth-panel">
         <div className="section-heading">
           <div>
@@ -417,38 +458,24 @@ export function HomeConsole() {
 
             <div className="divider" />
 
-            <div className="form-grid two-up">
-              <label className="field">
-                <span>Email</span>
-                <input
-                  className="input"
-                  onChange={(event) => setEmail(event.target.value)}
-                  placeholder="you@example.com"
-                  type="email"
-                  value={email}
-                />
-              </label>
-              <div className="field action-field">
-                <span>Passwordless sign-in</span>
-                <button
-                  className="button button-secondary"
-                  disabled={isPending || !email}
-                  onClick={() => startTransition(() => void sendMagicLink())}
-                  type="button"
-                >
-                  Send magic link
-                </button>
+            <div className="stack">
+              <div>
+                <p className="eyebrow">Google One Tap</p>
+                <p className="muted-copy">
+                  One Tap will open automatically when available. If the browser suppresses it, use the
+                  Google button below.
+                </p>
               </div>
-            </div>
 
-            <button
-              className="button button-google"
-              disabled={isPending}
-              onClick={() => startTransition(() => void signInWithGoogle())}
-              type="button"
-            >
-              Sign in with Google
-            </button>
+              {googleClientId ? (
+                <div className="google-button-shell" ref={googleButtonRef} />
+              ) : (
+                <p className="banner banner-error">
+                  Missing Google client id. Set <code>NEXT_PUBLIC_GOOGLE_CLIENT_ID</code> or{" "}
+                  <code>GOOGLE_CLIENT_ID</code>.
+                </p>
+              )}
+            </div>
           </div>
         ) : (
           <div className="stack">

@@ -219,6 +219,12 @@ a {
   background: linear-gradient(135deg, rgba(243, 239, 223, 0.12), rgba(127, 209, 163, 0.16));
 }
 
+.google-button-shell {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+}
+
 .button-ghost {
   background: transparent;
   border-color: rgba(243, 239, 223, 0.18);
