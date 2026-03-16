@@ -8,6 +8,7 @@ import type { Session, User } from "@supabase/supabase-js";
 import { cardLabel } from "../lib/rummy/cards";
 import type { Card } from "../lib/rummy/types";
 import { createBrowserSupabaseClient } from "../lib/supabase/client";
+import { getPublicSupabaseEnv } from "../lib/supabase/env";
 
 interface GameRow {
   id: string;
@@ -45,7 +46,85 @@ interface ActionRow {
   payload: Record<string, unknown>;
 }
 
+interface StartGameDiagnostics {
+  capturedAt: string;
+  sessionPresent: boolean;
+  sessionUserId: string | null;
+  getUserId: string | null;
+  accessTokenPreview: string | null;
+  accessTokenClaims: {
+    sub?: string;
+    role?: string;
+    aud?: string | string[];
+    iss?: string;
+    exp?: number;
+  } | null;
+  functionRequest: {
+    url: string;
+    status: number | null;
+    ok: boolean;
+    body: string | null;
+  };
+}
+
 const supabase = createBrowserSupabaseClient();
+const { anonKey, url: supabaseUrl } = getPublicSupabaseEnv();
+
+function decodeJwtClaims(token: string) {
+  try {
+    const [, payload] = token.split(".");
+
+    if (!payload) {
+      return null;
+    }
+
+    const normalizedPayload = payload.replace(/-/gu, "+").replace(/_/gu, "/");
+    const paddedPayload = normalizedPayload.padEnd(Math.ceil(normalizedPayload.length / 4) * 4, "=");
+    const json = window.atob(paddedPayload);
+
+    return JSON.parse(json) as StartGameDiagnostics["accessTokenClaims"];
+  } catch {
+    return null;
+  }
+}
+
+function getTokenPreview(token: string) {
+  if (token.length <= 24) {
+    return token;
+  }
+
+  return `${token.slice(0, 12)}...${token.slice(-12)}`;
+}
+
+async function postStartGame(gameId: string, accessToken: string) {
+  const response = await fetch(`${supabaseUrl}/functions/v1/start-game`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      apikey: anonKey,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ gameId })
+  });
+
+  const rawBody = await response.text();
+  let parsedBody: unknown = null;
+
+  if (rawBody) {
+    try {
+      parsedBody = JSON.parse(rawBody) as unknown;
+    } catch {
+      parsedBody = rawBody;
+    }
+  }
+
+  return {
+    ok: response.ok,
+    status: response.status,
+    body: parsedBody,
+    rawBody
+  };
+}
 
 function userLabel(userId: string, profiles: Record<string, string | null>, currentUser?: User | null) {
   const name = profiles[userId];
@@ -77,6 +156,7 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [startGameDiagnostics, setStartGameDiagnostics] = useState<StartGameDiagnostics | null>(null);
   const [isPending, startTransition] = useTransition();
 
   useEffect(() => {
@@ -368,18 +448,86 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
   async function startGame() {
     setErrorMessage(null);
     setStatusMessage(null);
+    setStartGameDiagnostics(null);
 
-    const { error } = await supabase.functions.invoke("start-game", {
-      body: { gameId }
-    });
+    const {
+      data: { session: currentSession },
+      error: sessionError
+    } = await supabase.auth.getSession();
 
-    if (error) {
-      setErrorMessage(error.message);
+    if (sessionError) {
+      setErrorMessage(sessionError.message);
+      return;
+    }
+
+    if (!currentSession?.access_token) {
+      setErrorMessage("No Supabase session token is available in the browser.");
+      return;
+    }
+
+    const response = await postStartGame(gameId, currentSession.access_token);
+
+    if (!response.ok) {
+      const message =
+        typeof response.body === "object" && response.body && "message" in response.body
+          ? String(response.body.message)
+          : response.rawBody || `start-game failed with status ${response.status}`;
+
+      setErrorMessage(message);
       return;
     }
 
     setStatusMessage("Game started.");
     await refreshLobby();
+  }
+
+  async function runStartGameDiagnostics() {
+    setErrorMessage(null);
+    setStatusMessage(null);
+
+    const [
+      {
+        data: { session: currentSession },
+        error: sessionError
+      },
+      {
+        data: { user: authenticatedUser },
+        error: getUserError
+      }
+    ] = await Promise.all([supabase.auth.getSession(), supabase.auth.getUser()]);
+
+    const accessToken = currentSession?.access_token ?? null;
+    const functionRequest =
+      accessToken === null
+        ? {
+            url: `${supabaseUrl}/functions/v1/start-game`,
+            status: null,
+            ok: false,
+            body: sessionError?.message ?? getUserError?.message ?? "No access token available."
+          }
+        : await postStartGame(gameId, accessToken)
+            .then((result) => ({
+              url: `${supabaseUrl}/functions/v1/start-game`,
+              status: result.status,
+              ok: result.ok,
+              body: result.rawBody
+            }))
+            .catch((error: unknown) => ({
+              url: `${supabaseUrl}/functions/v1/start-game`,
+              status: null,
+              ok: false,
+              body: error instanceof Error ? error.message : "Unknown network error"
+            }));
+
+    setStartGameDiagnostics({
+      capturedAt: new Date().toISOString(),
+      sessionPresent: !!currentSession,
+      sessionUserId: currentSession?.user.id ?? null,
+      getUserId: authenticatedUser?.id ?? null,
+      accessTokenPreview: accessToken ? getTokenPreview(accessToken) : null,
+      accessTokenClaims: accessToken ? decodeJwtClaims(accessToken) : null,
+      functionRequest
+    });
   }
 
   async function copyCode() {
@@ -485,6 +633,29 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
                   <strong>Start rule:</strong> every seated player must be ready before the host can start.
                 </p>
               </div>
+
+              <details className="diagnostics-panel">
+                <summary>Auth diagnostics</summary>
+                <div className="stack">
+                  <p className="muted-copy">
+                    Capture the live browser session and call <code>start-game</code> directly with
+                    the current bearer token.
+                  </p>
+                  <button
+                    className="button button-ghost"
+                    disabled={isPending}
+                    onClick={() => startTransition(() => void runStartGameDiagnostics())}
+                    type="button"
+                  >
+                    Run diagnostics
+                  </button>
+                  {startGameDiagnostics ? (
+                    <pre className="diagnostics-output">
+                      {JSON.stringify(startGameDiagnostics, null, 2)}
+                    </pre>
+                  ) : null}
+                </div>
+              </details>
             </article>
 
             <article className="panel">

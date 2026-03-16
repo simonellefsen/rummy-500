@@ -352,6 +352,34 @@ a {
   margin-top: 1rem;
 }
 
+.diagnostics-panel {
+  margin-top: 1rem;
+  border-radius: 22px;
+  border: 1px solid rgba(243, 239, 223, 0.1);
+  background: rgba(6, 18, 25, 0.32);
+  padding: 1rem;
+}
+
+.diagnostics-panel summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.diagnostics-output {
+  margin: 0;
+  max-height: 280px;
+  overflow: auto;
+  border-radius: 18px;
+  border: 1px solid rgba(243, 239, 223, 0.08);
+  background: rgba(4, 14, 21, 0.72);
+  padding: 0.9rem;
+  color: #d7dfec;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .back-link {
   color: var(--muted);
   text-decoration: none;
