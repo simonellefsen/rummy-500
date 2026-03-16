@@ -369,15 +369,8 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
     setErrorMessage(null);
     setStatusMessage(null);
 
-    const {
-      data: { session: currentSession }
-    } = await supabase.auth.getSession();
-
-    const accessToken = currentSession?.access_token;
-
     const { error } = await supabase.functions.invoke("start-game", {
-      body: { gameId },
-      headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {}
+      body: { gameId }
     });
 
     if (error) {
