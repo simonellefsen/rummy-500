@@ -144,6 +144,14 @@ function userLabel(userId: string, profiles: Record<string, string | null>, curr
   return `Player ${userId.slice(0, 6)}`;
 }
 
+function getConfiguredNumber(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function getCardsPerPlayer(config: Record<string, unknown> | null | undefined, playerCount: number) {
+  return getConfiguredNumber(config?.cardsPerPlayer) ?? (playerCount === 2 ? 13 : 7);
+}
+
 export function GameLobbyClient({ gameId }: { gameId: string }) {
   const router = useRouter();
   const [session, setSession] = useState<Session | null>(null);
@@ -481,6 +489,32 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
     await refreshLobby();
   }
 
+  async function playTurnAction(action: "draw_stock" | "draw_discard_top" | "discard_card", cardId?: string) {
+    setErrorMessage(null);
+    setStatusMessage(null);
+
+    const { error } = await supabase.schema("rummy500").rpc("play_turn_action", {
+      p_game_id: gameId,
+      p_action: action,
+      p_card_id: cardId ?? null
+    });
+
+    if (error) {
+      setErrorMessage(error.message);
+      return;
+    }
+
+    if (action === "draw_stock") {
+      setStatusMessage("Drew from the stock pile.");
+    } else if (action === "draw_discard_top") {
+      setStatusMessage("Picked up the top discard.");
+    } else {
+      setStatusMessage("Discarded card and passed the turn.");
+    }
+
+    await refreshLobby();
+  }
+
   async function runStartGameDiagnostics() {
     setErrorMessage(null);
     setStatusMessage(null);
@@ -545,6 +579,11 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
 
   const currentUser = session?.user ?? null;
   const currentPlayer = players.find((player) => player.user_id === currentUser?.id) ?? null;
+  const cardsPerPlayer = getCardsPerPlayer(game?.config, players.length);
+  const isCurrentTurn = !!currentUser && game?.turn_user_id === currentUser.id && round?.status === "active";
+  const canDraw = isCurrentTurn && hand.length === cardsPerPlayer;
+  const canDiscard = isCurrentTurn && hand.length === cardsPerPlayer + 1;
+  const activeTurnLabel = game?.turn_user_id ? userLabel(game.turn_user_id, profiles, currentUser) : "Not started";
   const canStart =
     !!currentUser &&
     !!game &&
@@ -553,6 +592,7 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
     players.length >= 2 &&
     players.every((player) => player.ready);
   const discardTop = round?.discard_pile?.at(-1) ?? null;
+  const discardCount = round?.discard_pile?.length ?? 0;
 
   return (
     <main className="page-shell">
@@ -573,6 +613,15 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
       {loading ? <p className="muted-copy">Checking session…</p> : null}
       {statusMessage ? <p className="banner banner-success">{statusMessage}</p> : null}
       {errorMessage ? <p className="banner banner-error">{errorMessage}</p> : null}
+      {currentUser && game?.status === "in_progress" ? (
+        <p className={`banner ${isCurrentTurn ? "banner-success" : ""}`}>
+          {isCurrentTurn
+            ? canDraw
+              ? "Your turn. Draw from the stock pile or take the top discard."
+              : "Your turn. Discard one card to end it."
+            : `${activeTurnLabel} is up next.`}
+        </p>
+      ) : null}
 
       {!currentUser ? (
         <section className="panel">
@@ -624,7 +673,7 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
                 </p>
                 <p>
                   <strong>Turn:</strong>{" "}
-                  {game?.turn_user_id ? userLabel(game.turn_user_id, profiles, currentUser) : "Not started"}
+                  {activeTurnLabel}
                 </p>
                 <p>
                   <strong>Round:</strong> {game?.round_number ?? 0}
@@ -676,7 +725,10 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
                         Seat {player.seat_index + 1} · {player.ready ? "Ready" : "Waiting"}
                       </p>
                     </div>
-                    <span className="pill subtle">Score {player.total_score}</span>
+                    <div className="player-row-meta">
+                      {game?.turn_user_id === player.user_id ? <span className="pill">Current turn</span> : null}
+                      <span className="pill subtle">Score {player.total_score}</span>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -700,6 +752,38 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
                 </div>
               ) : (
                 <div className="stack">
+                  <div className="pile-grid">
+                    <div className="pile-card">
+                      <p className="eyebrow">Stock pile</p>
+                      <div className="pile-visual pile-visual-stock">Draw</div>
+                      <strong>{round.stock_count} cards left</strong>
+                      <span className="muted-copy">Face-down draw pile.</span>
+                      <button
+                        className="button"
+                        disabled={!canDraw || isPending || round.stock_count === 0}
+                        onClick={() => startTransition(() => void playTurnAction("draw_stock"))}
+                        type="button"
+                      >
+                        Draw from stock
+                      </button>
+                    </div>
+
+                    <div className="pile-card">
+                      <p className="eyebrow">Discard pile</p>
+                      <div className="pile-visual">{discardTop ? cardLabel(discardTop) : "Empty"}</div>
+                      <strong>{discardCount} cards visible</strong>
+                      <span className="muted-copy">Current implementation allows taking the top discard.</span>
+                      <button
+                        className="button button-secondary"
+                        disabled={!canDraw || isPending || discardCount === 0}
+                        onClick={() => startTransition(() => void playTurnAction("draw_discard_top"))}
+                        type="button"
+                      >
+                        Take top discard
+                      </button>
+                    </div>
+                  </div>
+
                   <div className="status-strip">
                     <div>
                       <p className="strip-label">Discard top</p>
@@ -720,9 +804,17 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
                     <div className="card-row">
                       {hand.length > 0 ? (
                         hand.map((card) => (
-                          <span className="card-chip" key={card.id}>
-                            {cardLabel(card)}
-                          </span>
+                          <div className="hand-card" key={card.id}>
+                            <span className="card-chip">{cardLabel(card)}</span>
+                            <button
+                              className="button button-ghost card-action"
+                              disabled={!canDiscard || isPending}
+                              onClick={() => startTransition(() => void playTurnAction("discard_card", card.id))}
+                              type="button"
+                            >
+                              Discard
+                            </button>
+                          </div>
                         ))
                       ) : (
                         <span className="muted-copy">Your hand becomes visible here after dealing.</span>

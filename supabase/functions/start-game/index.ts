@@ -150,6 +150,10 @@ Deno.serve(async (request) => {
       cardsPerPlayer:
         typeof game.config?.cardsPerPlayer === "number" ? game.config.cardsPerPlayer : playerCount === 2 ? 13 : 7
     };
+    const resolvedConfig = {
+      ...(typeof game.config === "object" && game.config ? game.config : {}),
+      ...config
+    };
 
     const roundNumber = Number(game.round_number) + 1;
     const cards = shuffle(createDeck(config.decks, config.jokers));
@@ -189,6 +193,7 @@ Deno.serve(async (request) => {
         round_number: roundNumber,
         dealer_user_id: dealer.user_id,
         status: "active",
+        stock_pile: remainingCards,
         stock_count: remainingCards.length,
         discard_pile: [firstDiscard],
         table_melds: [],
@@ -224,6 +229,7 @@ Deno.serve(async (request) => {
       .from("games")
       .update({
         status: "in_progress",
+        config: resolvedConfig,
         round_number: roundNumber,
         turn_user_id: firstTurn.user_id,
         started_at: new Date().toISOString()
