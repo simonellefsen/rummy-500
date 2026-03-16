@@ -1,11 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 
 import { cardLabel } from "../lib/rummy/cards";
+import { findSuggestedMelds } from "../lib/rummy/meld-options";
 import type { Card } from "../lib/rummy/types";
 import { createBrowserSupabaseClient } from "../lib/supabase/client";
 import { getPublicSupabaseEnv } from "../lib/supabase/env";
@@ -69,6 +69,12 @@ interface StartGameDiagnostics {
 
 const supabase = createBrowserSupabaseClient();
 const { anonKey, url: supabaseUrl } = getPublicSupabaseEnv();
+const SUIT_SYMBOLS: Record<Exclude<Card["suit"], null>, string> = {
+  clubs: "♣",
+  diamonds: "♦",
+  hearts: "♥",
+  spades: "♠"
+};
 
 function decodeJwtClaims(token: string) {
   try {
@@ -152,8 +158,27 @@ function getCardsPerPlayer(config: Record<string, unknown> | null | undefined, p
   return getConfiguredNumber(config?.cardsPerPlayer) ?? (playerCount === 2 ? 13 : 7);
 }
 
+function getSeatStyle(seatIndex: number, totalPlayers: number, currentSeatIndex: number) {
+  const relativeSeat = ((seatIndex - currentSeatIndex) % totalPlayers + totalPlayers) % totalPlayers;
+  const angle = Math.PI / 2 + (relativeSeat / totalPlayers) * Math.PI * 2;
+  const x = 50 + Math.cos(angle) * 39;
+  const y = 50 + Math.sin(angle) * 33;
+
+  return {
+    left: `${x}%`,
+    top: `${y}%`
+  };
+}
+
+function getCardSuitSymbol(card: Card) {
+  return card.suit ? SUIT_SYMBOLS[card.suit] : "★";
+}
+
+function getCardTone(card: Card) {
+  return card.suit === "diamonds" || card.suit === "hearts" || card.rank === "JOKER" ? "is-red" : "is-black";
+}
+
 export function GameLobbyClient({ gameId }: { gameId: string }) {
-  const router = useRouter();
   const [session, setSession] = useState<Session | null>(null);
   const [game, setGame] = useState<GameRow | null>(null);
   const [players, setPlayers] = useState<PlayerRow[]>([]);
@@ -165,6 +190,7 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [startGameDiagnostics, setStartGameDiagnostics] = useState<StartGameDiagnostics | null>(null);
+  const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   useEffect(() => {
@@ -307,6 +333,7 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
         setProfiles({});
         setRound(null);
         setHand([]);
+        setSelectedCardId(null);
         return;
       }
 
@@ -432,6 +459,9 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
     setProfiles(nextProfiles);
     setRound((roundData as RoundRow | null) ?? null);
     setHand(nextHand);
+    setSelectedCardId((currentSelectedCardId) =>
+      nextHand.some((card) => card.id === currentSelectedCardId) ? currentSelectedCardId : null
+    );
     setActions((actionsData as ActionRow[] | null) ?? []);
   }
 
@@ -512,6 +542,10 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
       setStatusMessage("Discarded card and passed the turn.");
     }
 
+    if (action === "discard_card") {
+      setSelectedCardId(null);
+    }
+
     await refreshLobby();
   }
 
@@ -584,6 +618,9 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
   const canDraw = isCurrentTurn && hand.length === cardsPerPlayer;
   const canDiscard = isCurrentTurn && hand.length === cardsPerPlayer + 1;
   const activeTurnLabel = game?.turn_user_id ? userLabel(game.turn_user_id, profiles, currentUser) : "Not started";
+  const currentSeatIndex = currentPlayer?.seat_index ?? 0;
+  const selectedCard = hand.find((card) => card.id === selectedCardId) ?? null;
+  const suggestedMelds = selectedCard ? findSuggestedMelds(hand, selectedCard.id) : [];
   const canStart =
     !!currentUser &&
     !!game &&
@@ -630,12 +667,12 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
         </section>
       ) : (
         <>
-          <section className="grid lobby-grid">
-            <article className="panel">
+          <section className="table-layout-shell">
+            <aside className="panel table-sidebar">
               <div className="section-heading">
                 <div>
                   <p className="eyebrow">Lobby controls</p>
-                  <h2>Game settings</h2>
+                  <h2>Match controls</h2>
                 </div>
                 <button className="button button-ghost" onClick={() => startTransition(() => void refreshLobby())} type="button">
                   Refresh
@@ -672,149 +709,204 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
                   <strong>Host:</strong> {game ? userLabel(game.host_user_id, profiles, currentUser) : "Unknown"}
                 </p>
                 <p>
-                  <strong>Turn:</strong>{" "}
-                  {activeTurnLabel}
+                  <strong>Invite:</strong> {game?.invite_code ?? "----"}
+                </p>
+                <p>
+                  <strong>Turn:</strong> {activeTurnLabel}
                 </p>
                 <p>
                   <strong>Round:</strong> {game?.round_number ?? 0}
                 </p>
-                <p>
-                  <strong>Start rule:</strong> every seated player must be ready before the host can start.
-                </p>
               </div>
 
-              <details className="diagnostics-panel">
-                <summary>Auth diagnostics</summary>
-                <div className="stack">
-                  <p className="muted-copy">
-                    Capture the live browser session and call <code>start-game</code> directly with
-                    the current bearer token.
-                  </p>
-                  <button
-                    className="button button-ghost"
-                    disabled={isPending}
-                    onClick={() => startTransition(() => void runStartGameDiagnostics())}
-                    type="button"
-                  >
-                    Run diagnostics
-                  </button>
-                  {startGameDiagnostics ? (
-                    <pre className="diagnostics-output">
-                      {JSON.stringify(startGameDiagnostics, null, 2)}
-                    </pre>
-                  ) : null}
+              <div className="stack">
+                <div className="selection-panel">
+                  <p className="eyebrow">Selected card</p>
+                  <h3>{selectedCard ? cardLabel(selectedCard) : "Choose a card from your hand"}</h3>
+                  {!selectedCard ? (
+                    <p className="muted-copy">Selecting a card reveals possible plays for sets, runs, or discard.</p>
+                  ) : (
+                    <>
+                      {suggestedMelds.length > 0 ? (
+                        <div className="suggestion-list">
+                          {suggestedMelds.map((suggestion) => (
+                            <div className="suggestion-card" key={`${selectedCard.id}-${suggestion.kind}`}>
+                              <strong>{suggestion.kind === "set" ? "Possible set" : "Possible run"}</strong>
+                              <p>{suggestion.cards.map((card) => cardLabel(card)).join(" · ")}</p>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="muted-copy">No meld found for this card yet.</p>
+                      )}
+                      {canDiscard ? (
+                        <button
+                          className="button"
+                          onClick={() => startTransition(() => void playTurnAction("discard_card", selectedCard.id))}
+                          type="button"
+                        >
+                          Discard selected card
+                        </button>
+                      ) : null}
+                    </>
+                  )}
                 </div>
-              </details>
-            </article>
 
-            <article className="panel">
-              <div className="section-heading">
-                <div>
-                  <p className="eyebrow">Players</p>
-                  <h2>Seats and scores</h2>
-                </div>
-                <span className="stat-pill">{players.length} seated</span>
-              </div>
-
-              <div className="player-list">
-                {players.map((player) => (
-                  <div className="player-row" key={player.user_id}>
-                    <div>
-                      <strong>{userLabel(player.user_id, profiles, currentUser)}</strong>
-                      <p>
-                        Seat {player.seat_index + 1} · {player.ready ? "Ready" : "Waiting"}
-                      </p>
-                    </div>
-                    <div className="player-row-meta">
-                      {game?.turn_user_id === player.user_id ? <span className="pill">Current turn</span> : null}
-                      <span className="pill subtle">Score {player.total_score}</span>
-                    </div>
+                <details className="diagnostics-panel">
+                  <summary>Auth diagnostics</summary>
+                  <div className="stack">
+                    <p className="muted-copy">
+                      Capture the live browser session and call <code>start-game</code> directly with
+                      the current bearer token.
+                    </p>
+                    <button
+                      className="button button-ghost"
+                      disabled={isPending}
+                      onClick={() => startTransition(() => void runStartGameDiagnostics())}
+                      type="button"
+                    >
+                      Run diagnostics
+                    </button>
+                    {startGameDiagnostics ? (
+                      <pre className="diagnostics-output">
+                        {JSON.stringify(startGameDiagnostics, null, 2)}
+                      </pre>
+                    ) : null}
                   </div>
-                ))}
+                </details>
               </div>
-            </article>
-          </section>
+            </aside>
 
-          <section className="grid lobby-grid">
-            <article className="panel">
-              <div className="section-heading">
-                <div>
-                  <p className="eyebrow">Round state</p>
-                  <h2>Current table</h2>
-                </div>
-                {round ? <span className="stat-pill">Stock {round.stock_count}</span> : null}
-              </div>
-
+            <section className="game-table-panel">
               {!round ? (
-                <div className="empty-state">
+                <div className="panel empty-state">
                   <p>No round has started yet.</p>
                   <span>The start-game Edge Function will deal hands and create the opening discard.</span>
                 </div>
               ) : (
-                <div className="stack">
-                  <div className="pile-grid">
-                    <div className="pile-card">
-                      <p className="eyebrow">Stock pile</p>
-                      <div className="pile-visual pile-visual-stock">Draw</div>
-                      <strong>{round.stock_count} cards left</strong>
-                      <span className="muted-copy">Face-down draw pile.</span>
-                      <button
-                        className="button"
-                        disabled={!canDraw || isPending || round.stock_count === 0}
-                        onClick={() => startTransition(() => void playTurnAction("draw_stock"))}
-                        type="button"
+                <div className="game-table-surface">
+                  <div className="table-felt">
+                    {players.map((player) => (
+                      <div
+                        className={`table-seat ${game?.turn_user_id === player.user_id ? "is-active" : ""} ${
+                          currentUser?.id === player.user_id ? "is-self" : ""
+                        }`}
+                        key={player.user_id}
+                        style={getSeatStyle(player.seat_index, Math.max(players.length, 1), currentSeatIndex)}
                       >
-                        Draw from stock
-                      </button>
-                    </div>
+                        <strong>{userLabel(player.user_id, profiles, currentUser)}</strong>
+                        <span>Score {player.total_score}</span>
+                        <span>Seat {player.seat_index + 1}</span>
+                      </div>
+                    ))}
 
-                    <div className="pile-card">
-                      <p className="eyebrow">Discard pile</p>
-                      <div className="pile-visual">{discardTop ? cardLabel(discardTop) : "Empty"}</div>
-                      <strong>{discardCount} cards visible</strong>
-                      <span className="muted-copy">Current implementation allows taking the top discard.</span>
-                      <button
-                        className="button button-secondary"
-                        disabled={!canDraw || isPending || discardCount === 0}
-                        onClick={() => startTransition(() => void playTurnAction("draw_discard_top"))}
-                        type="button"
-                      >
-                        Take top discard
-                      </button>
+                    <div className="table-center">
+                      <div className="center-piles">
+                        <button
+                          className="table-pile pile-stock"
+                          disabled={!canDraw || isPending || round.stock_count === 0}
+                          onClick={() => startTransition(() => void playTurnAction("draw_stock"))}
+                          type="button"
+                        >
+                          <span className="pile-label">Stock</span>
+                          <div className="pile-stack pile-stack-back" />
+                          <strong>{round.stock_count}</strong>
+                        </button>
+
+                        <button
+                          className="table-pile pile-discard"
+                          disabled={!canDraw || isPending || discardCount === 0}
+                          onClick={() => startTransition(() => void playTurnAction("draw_discard_top"))}
+                          type="button"
+                        >
+                          <span className="pile-label">Discard</span>
+                          {discardTop ? (
+                            <div className={`playing-card face-up mini ${getCardTone(discardTop)}`}>
+                              <span className="card-corner top">
+                                {discardTop.rank}
+                                <small>{getCardSuitSymbol(discardTop)}</small>
+                              </span>
+                              <span className="card-center">{getCardSuitSymbol(discardTop)}</span>
+                              <span className="card-corner bottom">
+                                {discardTop.rank}
+                                <small>{getCardSuitSymbol(discardTop)}</small>
+                              </span>
+                            </div>
+                          ) : (
+                            <div className="pile-stack">Empty</div>
+                          )}
+                          <strong>{discardCount}</strong>
+                        </button>
+                      </div>
+
+                      <div className="meld-zone">
+                        <div className="meld-slot">
+                          <p className="eyebrow">Sets</p>
+                          {round.table_melds?.length ? (
+                            <div className="meld-preview-row">
+                              {round.table_melds.map((meld, index) => (
+                                <div className="meld-preview" key={`${meld.type ?? "meld"}-${index}`}>
+                                  {(meld.cards ?? []).map((card) => (
+                                    <div className={`playing-card face-up tiny ${getCardTone(card)}`} key={card.id}>
+                                      <span className="card-center">{cardLabel(card)}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="muted-copy">Room for sets.</span>
+                          )}
+                        </div>
+                        <div className="meld-slot">
+                          <p className="eyebrow">Runs</p>
+                          {selectedCard && suggestedMelds.length > 0 ? (
+                            <div className="suggestion-list">
+                              {suggestedMelds.map((suggestion) => (
+                                <div className="suggestion-card" key={`table-${suggestion.kind}`}>
+                                  <strong>{suggestion.kind === "set" ? "Preview set" : "Preview run"}</strong>
+                                  <p>{suggestion.cards.map((card) => cardLabel(card)).join(" · ")}</p>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="muted-copy">Select a card to see possible runs or sets.</span>
+                          )}
+                        </div>
+                      </div>
                     </div>
                   </div>
 
-                  <div className="status-strip">
-                    <div>
-                      <p className="strip-label">Discard top</p>
-                      <strong>{discardTop ? cardLabel(discardTop) : "Empty"}</strong>
+                  <div className="table-footer">
+                    <div className="section-heading">
+                      <div>
+                        <p className="eyebrow">Your hand</p>
+                        <h2>Playing cards</h2>
+                      </div>
+                      <span className="stat-pill">{hand.length} cards</span>
                     </div>
-                    <div>
-                      <p className="strip-label">Meld groups</p>
-                      <strong>{round.table_melds?.length ?? 0}</strong>
-                    </div>
-                    <div>
-                      <p className="strip-label">Round status</p>
-                      <strong>{round.status}</strong>
-                    </div>
-                  </div>
 
-                  <div>
-                    <p className="eyebrow">Your hand</p>
-                    <div className="card-row">
+                    <div className="hand-fan">
                       {hand.length > 0 ? (
                         hand.map((card) => (
-                          <div className="hand-card" key={card.id}>
-                            <span className="card-chip">{cardLabel(card)}</span>
-                            <button
-                              className="button button-ghost card-action"
-                              disabled={!canDiscard || isPending}
-                              onClick={() => startTransition(() => void playTurnAction("discard_card", card.id))}
-                              type="button"
-                            >
-                              Discard
-                            </button>
-                          </div>
+                          <button
+                            className={`playing-card face-up hand-playing-card ${getCardTone(card)} ${
+                              selectedCardId === card.id ? "is-selected" : ""
+                            }`}
+                            key={card.id}
+                            onClick={() => setSelectedCardId((currentSelected) => (currentSelected === card.id ? null : card.id))}
+                            type="button"
+                          >
+                            <span className="card-corner top">
+                              {card.rank}
+                              <small>{getCardSuitSymbol(card)}</small>
+                            </span>
+                            <span className="card-center">{getCardSuitSymbol(card)}</span>
+                            <span className="card-corner bottom">
+                              {card.rank}
+                              <small>{getCardSuitSymbol(card)}</small>
+                            </span>
+                          </button>
                         ))
                       ) : (
                         <span className="muted-copy">Your hand becomes visible here after dealing.</span>
@@ -823,14 +915,17 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
                   </div>
                 </div>
               )}
-            </article>
+            </section>
+          </section>
 
+          <section className="grid lobby-grid">
             <article className="panel">
               <div className="section-heading">
                 <div>
                   <p className="eyebrow">Audit trail</p>
                   <h2>Recent actions</h2>
                 </div>
+                <span className="stat-pill">{players.length} seated</span>
               </div>
 
               {actions.length === 0 ? (
