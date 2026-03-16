@@ -655,41 +655,73 @@ a {
   line-height: 1.5;
 }
 
-.playing-card {
+.cardmeister-shell {
   position: relative;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  display: inline-block;
   width: 104px;
   height: 148px;
   border-radius: 16px;
-  border: 1px solid rgba(19, 31, 39, 0.16);
-  background: linear-gradient(180deg, #fffef9 0%, #f5f0e4 100%);
-  color: #1c2428;
+  overflow: hidden;
   box-shadow: 0 16px 24px rgba(0, 0, 0, 0.18);
-  text-align: center;
 }
 
-.playing-card.mini {
+.cardmeister-shell.hand {
+  width: 104px;
+  height: 148px;
+}
+
+.cardmeister-shell.mini {
   width: 90px;
   height: 128px;
 }
 
-.playing-card.tiny {
+.cardmeister-shell.tiny {
   width: 68px;
   height: 94px;
 }
 
-.playing-card.face-up.is-red {
-  color: #b32f2f;
+.cardmeister-shell.is-selected {
+  transform: translateY(-16px);
+  box-shadow: 0 0 0 3px rgba(233, 191, 101, 0.18), 0 24px 32px rgba(0, 0, 0, 0.24);
 }
 
-.playing-card.face-up.is-black {
-  color: #1c2428;
+.cardmeister-shell playing-card,
+.cardmeister-shell img,
+.cardmeister-shell svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+}
+
+.joker-card-face {
+  width: 100%;
+  height: 100%;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(19, 31, 39, 0.16);
+  background: linear-gradient(180deg, #fffef9 0%, #f5f0e4 100%);
+  color: #a72424;
+  text-align: center;
+  font-family: var(--display-font);
+  font-weight: 700;
+}
+
+.joker-card-face small {
+  margin-top: 0.35rem;
+  color: #6c7076;
+  font-size: 0.88rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .hand-playing-card {
   appearance: none;
+  border: 0;
+  background: transparent;
+  padding: 0;
   cursor: pointer;
   transition:
     transform 160ms ease,
@@ -699,48 +731,7 @@ a {
 
 .hand-playing-card:hover {
   transform: translateY(-8px) rotate(-1deg);
-  box-shadow: 0 22px 30px rgba(0, 0, 0, 0.22);
-}
-
-.hand-playing-card.is-selected {
-  transform: translateY(-16px);
-  border-color: rgba(233, 191, 101, 0.62);
-  box-shadow: 0 0 0 3px rgba(233, 191, 101, 0.18), 0 24px 32px rgba(0, 0, 0, 0.24);
-}
-
-.card-corner {
-  position: absolute;
-  display: grid;
-  line-height: 1;
-  font-family: var(--display-font);
-  font-size: 1.4rem;
-  font-weight: 700;
-}
-
-.card-corner small {
-  font-size: 1rem;
-}
-
-.card-corner.top {
-  top: 10px;
-  left: 10px;
-  justify-items: start;
-}
-
-.card-corner.bottom {
-  right: 10px;
-  bottom: 10px;
-  justify-items: end;
-  transform: rotate(180deg);
-}
-
-.card-center {
-  font-size: 2.3rem;
-  font-weight: 700;
-}
-
-.playing-card.tiny .card-center {
-  font-size: 1rem;
+  box-shadow: none;
 }
 
 .pile-grid {
@@ -905,12 +896,12 @@ a {
     justify-content: center;
   }
 
-  .playing-card {
+  .cardmeister-shell.hand {
     width: 84px;
     height: 122px;
   }
 
-  .playing-card.mini {
+  .cardmeister-shell.mini {
     width: 80px;
     height: 116px;
   }

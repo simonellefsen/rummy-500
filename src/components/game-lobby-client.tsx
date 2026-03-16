@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Script from "next/script";
 import { useEffect, useState, useTransition } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 
@@ -69,11 +70,11 @@ interface StartGameDiagnostics {
 
 const supabase = createBrowserSupabaseClient();
 const { anonKey, url: supabaseUrl } = getPublicSupabaseEnv();
-const SUIT_SYMBOLS: Record<Exclude<Card["suit"], null>, string> = {
-  clubs: "♣",
-  diamonds: "♦",
-  hearts: "♥",
-  spades: "♠"
+const CARDMEISTER_SUITS: Record<Exclude<Card["suit"], null>, string> = {
+  clubs: "c",
+  diamonds: "d",
+  hearts: "h",
+  spades: "s"
 };
 
 function decodeJwtClaims(token: string) {
@@ -170,12 +171,64 @@ function getSeatStyle(seatIndex: number, totalPlayers: number, currentSeatIndex:
   };
 }
 
-function getCardSuitSymbol(card: Card) {
-  return card.suit ? SUIT_SYMBOLS[card.suit] : "★";
+function getCardmeisterCid(card: Card) {
+  if (card.isJoker || !card.suit) {
+    return null;
+  }
+
+  const rank =
+    card.rank === "A" || card.rank === "J" || card.rank === "Q" || card.rank === "K"
+      ? card.rank
+      : card.rank === "10"
+        ? "T"
+        : card.rank;
+
+  return `${rank}${CARDMEISTER_SUITS[card.suit]}`;
 }
 
-function getCardTone(card: Card) {
-  return card.suit === "diamonds" || card.suit === "hearts" || card.rank === "JOKER" ? "is-red" : "is-black";
+function PlayingCardFace({
+  card,
+  size,
+  selected = false
+}: {
+  card: Card;
+  size: "hand" | "mini" | "tiny";
+  selected?: boolean;
+}) {
+  const cid = getCardmeisterCid(card);
+
+  if (!cid) {
+    return (
+      <div className={`cardmeister-shell ${size} ${selected ? "is-selected" : ""}`}>
+        <div className="joker-card-face">
+          <span>JOKER</span>
+          <small>Wild</small>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={`cardmeister-shell ${size} ${selected ? "is-selected" : ""}`}>
+      <playing-card cid={cid} bordercolor="#cabf9d" borderradius="14" borderline="1" opacity="1"></playing-card>
+    </div>
+  );
+}
+
+function StockCardBack() {
+  return (
+    <div className="cardmeister-shell mini">
+      <playing-card
+        rank="0"
+        backcolor="#1848a6"
+        backtext="500"
+        backtextcolor="#f5f2ea"
+        bordercolor="#cabf9d"
+        borderradius="14"
+        borderline="1"
+      ></playing-card>
+    </div>
+  );
 }
 
 export function GameLobbyClient({ gameId }: { gameId: string }) {
@@ -633,6 +686,7 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
 
   return (
     <main className="page-shell">
+      <Script src="/vendor/cardmeister/elements.cardmeister.min.js" strategy="afterInteractive" />
       <section className="hero-panel">
         <div className="hero-topline">
           <Link className="back-link" href="/">
@@ -809,7 +863,7 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
                           type="button"
                         >
                           <span className="pile-label">Stock</span>
-                          <div className="pile-stack pile-stack-back" />
+                          <StockCardBack />
                           <strong>{round.stock_count}</strong>
                         </button>
 
@@ -821,17 +875,7 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
                         >
                           <span className="pile-label">Discard</span>
                           {discardTop ? (
-                            <div className={`playing-card face-up mini ${getCardTone(discardTop)}`}>
-                              <span className="card-corner top">
-                                {discardTop.rank}
-                                <small>{getCardSuitSymbol(discardTop)}</small>
-                              </span>
-                              <span className="card-center">{getCardSuitSymbol(discardTop)}</span>
-                              <span className="card-corner bottom">
-                                {discardTop.rank}
-                                <small>{getCardSuitSymbol(discardTop)}</small>
-                              </span>
-                            </div>
+                            <PlayingCardFace card={discardTop} size="mini" />
                           ) : (
                             <div className="pile-stack">Empty</div>
                           )}
@@ -847,9 +891,7 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
                               {round.table_melds.map((meld, index) => (
                                 <div className="meld-preview" key={`${meld.type ?? "meld"}-${index}`}>
                                   {(meld.cards ?? []).map((card) => (
-                                    <div className={`playing-card face-up tiny ${getCardTone(card)}`} key={card.id}>
-                                      <span className="card-center">{cardLabel(card)}</span>
-                                    </div>
+                                    <PlayingCardFace card={card} key={card.id} size="tiny" />
                                   ))}
                                 </div>
                               ))}
@@ -890,22 +932,12 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
                       {hand.length > 0 ? (
                         hand.map((card) => (
                           <button
-                            className={`playing-card face-up hand-playing-card ${getCardTone(card)} ${
-                              selectedCardId === card.id ? "is-selected" : ""
-                            }`}
+                            className="hand-playing-card"
                             key={card.id}
                             onClick={() => setSelectedCardId((currentSelected) => (currentSelected === card.id ? null : card.id))}
                             type="button"
                           >
-                            <span className="card-corner top">
-                              {card.rank}
-                              <small>{getCardSuitSymbol(card)}</small>
-                            </span>
-                            <span className="card-center">{getCardSuitSymbol(card)}</span>
-                            <span className="card-corner bottom">
-                              {card.rank}
-                              <small>{getCardSuitSymbol(card)}</small>
-                            </span>
+                            <PlayingCardFace card={card} selected={selectedCardId === card.id} size="hand" />
                           </button>
                         ))
                       ) : (
