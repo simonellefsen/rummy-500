@@ -7,3 +7,6 @@ extra_search_path = ["public", "extensions", "rummy500"]
 
 [functions.start-game]
 verify_jwt = false
+
+[functions.play-meld]
+verify_jwt = false

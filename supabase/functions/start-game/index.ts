@@ -232,6 +232,7 @@ Deno.serve(async (request) => {
         config: resolvedConfig,
         round_number: roundNumber,
         turn_user_id: firstTurn.user_id,
+        turn_stage: "awaiting_draw",
         started_at: new Date().toISOString()
       })
       .eq("id", body.gameId);

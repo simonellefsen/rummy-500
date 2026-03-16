@@ -1,0 +1,198 @@
+import { createClient } from "npm:@supabase/supabase-js@2";
+
+import { corsHeaders } from "../_shared/cors.ts";
+import { analyzeMeld, type Card } from "../_shared/rummy.ts";
+
+type TableMeld = {
+  owner_user_id: string;
+  type: "set" | "run";
+  cards: Card[];
+  points: number;
+  created_at: string;
+};
+
+Deno.serve(async (request) => {
+  if (request.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
+  }
+
+  try {
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+
+    if (!supabaseUrl || !serviceRoleKey) {
+      throw new Error("Missing required Supabase Edge Function environment variables.");
+    }
+
+    const authHeader = request.headers.get("Authorization");
+
+    if (!authHeader) {
+      return Response.json({ error: "Missing authorization header." }, { status: 401, headers: corsHeaders });
+    }
+
+    const accessToken = authHeader.replace(/^Bearer\s+/iu, "").trim();
+
+    if (!accessToken) {
+      return Response.json({ error: "Invalid authorization header." }, { status: 401, headers: corsHeaders });
+    }
+
+    const body = (await request.json()) as { gameId?: string; cardIds?: string[] };
+
+    if (!body.gameId) {
+      return Response.json({ error: "gameId is required." }, { status: 400, headers: corsHeaders });
+    }
+
+    if (!Array.isArray(body.cardIds) || body.cardIds.length < 3) {
+      return Response.json({ error: "cardIds must contain at least three cards." }, { status: 400, headers: corsHeaders });
+    }
+
+    const supabase = createClient(supabaseUrl, serviceRoleKey);
+    const {
+      data: { user },
+      error: authError
+    } = await supabase.auth.getUser(accessToken);
+
+    if (authError || !user) {
+      return Response.json({ error: "Not authenticated." }, { status: 401, headers: corsHeaders });
+    }
+
+    const { data: game, error: gameError } = await supabase
+      .schema("rummy500")
+      .from("games")
+      .select("id, status, turn_user_id, turn_stage, round_number")
+      .eq("id", body.gameId)
+      .single();
+
+    if (gameError || !game) {
+      return Response.json({ error: "Game not found." }, { status: 404, headers: corsHeaders });
+    }
+
+    if (game.status !== "in_progress") {
+      return Response.json({ error: "Game is not currently in progress." }, { status: 409, headers: corsHeaders });
+    }
+
+    if (game.turn_user_id !== user.id) {
+      return Response.json({ error: "It is not your turn." }, { status: 403, headers: corsHeaders });
+    }
+
+    if (game.turn_stage !== "awaiting_discard") {
+      return Response.json({ error: "You must draw before placing a meld." }, { status: 409, headers: corsHeaders });
+    }
+
+    const { data: round, error: roundError } = await supabase
+      .schema("rummy500")
+      .from("game_rounds")
+      .select("id, status, table_melds, action_log")
+      .eq("game_id", body.gameId)
+      .eq("round_number", game.round_number)
+      .single();
+
+    if (roundError || !round) {
+      return Response.json({ error: "Active round not found." }, { status: 404, headers: corsHeaders });
+    }
+
+    if (round.status !== "active") {
+      return Response.json({ error: "Round is not active." }, { status: 409, headers: corsHeaders });
+    }
+
+    const { data: handRow, error: handError } = await supabase
+      .schema("rummy500")
+      .from("player_hands")
+      .select("cards")
+      .eq("round_id", round.id)
+      .eq("user_id", user.id)
+      .single();
+
+    if (handError || !handRow) {
+      return Response.json({ error: "Current player hand not found." }, { status: 404, headers: corsHeaders });
+    }
+
+    const cards = (handRow.cards ?? []) as Card[];
+    const selectedIds = [...new Set(body.cardIds)];
+    const selectedCards = cards.filter((card) => selectedIds.includes(card.id));
+
+    if (selectedCards.length !== selectedIds.length) {
+      return Response.json({ error: "One or more selected cards are not in the current hand." }, { status: 400, headers: corsHeaders });
+    }
+
+    const meld = analyzeMeld(selectedCards);
+
+    if (!meld.isValid || meld.kind === "invalid") {
+      return Response.json({ error: meld.reason ?? "Invalid meld." }, { status: 400, headers: corsHeaders });
+    }
+
+    const nextHand = cards.filter((card) => !selectedIds.includes(card.id));
+    const nextTableMelds = [
+      ...(((round.table_melds ?? []) as TableMeld[]) || []),
+      {
+        owner_user_id: user.id,
+        type: meld.kind,
+        cards: selectedCards,
+        points: meld.points,
+        created_at: new Date().toISOString()
+      }
+    ];
+    const nextActionLog = [
+      ...(((round.action_log ?? []) as Record<string, unknown>[]) || []),
+      {
+        type: "play_meld",
+        actor_user_id: user.id,
+        meld_type: meld.kind,
+        cards: selectedCards,
+        at: new Date().toISOString()
+      }
+    ];
+
+    const { error: updateHandError } = await supabase
+      .schema("rummy500")
+      .from("player_hands")
+      .update({ cards: nextHand })
+      .eq("round_id", round.id)
+      .eq("user_id", user.id);
+
+    if (updateHandError) {
+      throw updateHandError;
+    }
+
+    const { error: updateRoundError } = await supabase
+      .schema("rummy500")
+      .from("game_rounds")
+      .update({
+        table_melds: nextTableMelds,
+        action_log: nextActionLog
+      })
+      .eq("id", round.id);
+
+    if (updateRoundError) {
+      throw updateRoundError;
+    }
+
+    const { error: actionError } = await supabase.schema("rummy500").from("game_actions").insert({
+      game_id: body.gameId,
+      round_id: round.id,
+      actor_user_id: user.id,
+      action_type: "play_meld",
+      payload: {
+        type: meld.kind,
+        points: meld.points,
+        cards: selectedCards
+      }
+    });
+
+    if (actionError) {
+      throw actionError;
+    }
+
+    return Response.json(
+      {
+        meldType: meld.kind,
+        points: meld.points,
+        remainingHandCount: nextHand.length
+      },
+      { headers: corsHeaders }
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unexpected error";
+    return Response.json({ error: message }, { status: 500, headers: corsHeaders });
+  }
+});

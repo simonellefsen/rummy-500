@@ -17,6 +17,7 @@ interface GameRow {
   status: string;
   host_user_id: string;
   turn_user_id: string | null;
+  turn_stage: "awaiting_draw" | "awaiting_discard";
   round_number: number;
   config: Record<string, unknown>;
   started_at: string | null;
@@ -103,15 +104,15 @@ function getTokenPreview(token: string) {
   return `${token.slice(0, 12)}...${token.slice(-12)}`;
 }
 
-async function postStartGame(gameId: string, accessToken: string) {
-  const response = await fetch(`${supabaseUrl}/functions/v1/start-game`, {
+async function postEdgeFunction(functionName: string, body: Record<string, unknown>, accessToken: string) {
+  const response = await fetch(`${supabaseUrl}/functions/v1/${functionName}`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${accessToken}`,
       apikey: anonKey,
       "Content-Type": "application/json"
     },
-    body: JSON.stringify({ gameId })
+    body: JSON.stringify(body)
   });
 
   const rawBody = await response.text();
@@ -149,14 +150,6 @@ function userLabel(userId: string, profiles: Record<string, string | null>, curr
   }
 
   return `Player ${userId.slice(0, 6)}`;
-}
-
-function getConfiguredNumber(value: unknown) {
-  return typeof value === "number" && Number.isFinite(value) ? value : null;
-}
-
-function getCardsPerPlayer(config: Record<string, unknown> | null | undefined, playerCount: number) {
-  return getConfiguredNumber(config?.cardsPerPlayer) ?? (playerCount === 2 ? 13 : 7);
 }
 
 function getSeatStyle(seatIndex: number, totalPlayers: number, currentSeatIndex: number) {
@@ -273,7 +266,7 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
             supabase
               .schema("rummy500")
               .from("games")
-              .select("id, invite_code, status, host_user_id, turn_user_id, round_number, config, started_at")
+              .select("id, invite_code, status, host_user_id, turn_user_id, turn_stage, round_number, config, started_at")
               .eq("id", gameId)
               .single(),
             supabase
@@ -427,7 +420,7 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
         supabase
           .schema("rummy500")
           .from("games")
-          .select("id, invite_code, status, host_user_id, turn_user_id, round_number, config, started_at")
+          .select("id, invite_code, status, host_user_id, turn_user_id, turn_stage, round_number, config, started_at")
           .eq("id", gameId)
           .single(),
         supabase
@@ -556,7 +549,7 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
       return;
     }
 
-    const response = await postStartGame(gameId, currentSession.access_token);
+    const response = await postEdgeFunction("start-game", { gameId }, currentSession.access_token);
 
     if (!response.ok) {
       const message =
@@ -602,6 +595,42 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
     await refreshLobby();
   }
 
+  async function playSuggestedMeld(cardIds: string[]) {
+    setErrorMessage(null);
+    setStatusMessage(null);
+
+    const {
+      data: { session: currentSession },
+      error: sessionError
+    } = await supabase.auth.getSession();
+
+    if (sessionError) {
+      setErrorMessage(sessionError.message);
+      return;
+    }
+
+    if (!currentSession?.access_token) {
+      setErrorMessage("No Supabase session token is available in the browser.");
+      return;
+    }
+
+    const response = await postEdgeFunction("play-meld", { gameId, cardIds }, currentSession.access_token);
+
+    if (!response.ok) {
+      const message =
+        typeof response.body === "object" && response.body && "error" in response.body
+          ? String(response.body.error)
+          : response.rawBody || `play-meld failed with status ${response.status}`;
+
+      setErrorMessage(message);
+      return;
+    }
+
+    setSelectedCardId(null);
+    setStatusMessage("Meld placed on the table.");
+    await refreshLobby();
+  }
+
   async function runStartGameDiagnostics() {
     setErrorMessage(null);
     setStatusMessage(null);
@@ -626,7 +655,7 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
             ok: false,
             body: sessionError?.message ?? getUserError?.message ?? "No access token available."
           }
-        : await postStartGame(gameId, accessToken)
+        : await postEdgeFunction("start-game", { gameId }, accessToken)
             .then((result) => ({
               url: `${supabaseUrl}/functions/v1/start-game`,
               status: result.status,
@@ -666,14 +695,16 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
 
   const currentUser = session?.user ?? null;
   const currentPlayer = players.find((player) => player.user_id === currentUser?.id) ?? null;
-  const cardsPerPlayer = getCardsPerPlayer(game?.config, players.length);
   const isCurrentTurn = !!currentUser && game?.turn_user_id === currentUser.id && round?.status === "active";
-  const canDraw = isCurrentTurn && hand.length === cardsPerPlayer;
-  const canDiscard = isCurrentTurn && hand.length === cardsPerPlayer + 1;
+  const canDraw = isCurrentTurn && game?.turn_stage === "awaiting_draw";
+  const canMeld = isCurrentTurn && game?.turn_stage === "awaiting_discard";
+  const canDiscard = isCurrentTurn && game?.turn_stage === "awaiting_discard";
   const activeTurnLabel = game?.turn_user_id ? userLabel(game.turn_user_id, profiles, currentUser) : "Not started";
   const currentSeatIndex = currentPlayer?.seat_index ?? 0;
   const selectedCard = hand.find((card) => card.id === selectedCardId) ?? null;
   const suggestedMelds = selectedCard ? findSuggestedMelds(hand, selectedCard.id) : [];
+  const tableSets = (round?.table_melds ?? []).filter((meld) => meld.type === "set");
+  const tableRuns = (round?.table_melds ?? []).filter((meld) => meld.type === "run");
   const canStart =
     !!currentUser &&
     !!game &&
@@ -709,7 +740,7 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
           {isCurrentTurn
             ? canDraw
               ? "Your turn. Draw from the stock pile or take the top discard."
-              : "Your turn. Discard one card to end it."
+              : "Your turn. Lay down a set or run, or discard to end it."
             : `${activeTurnLabel} is up next.`}
         </p>
       ) : null}
@@ -778,7 +809,7 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
                   <p className="eyebrow">Selected card</p>
                   <h3>{selectedCard ? cardLabel(selectedCard) : "Choose a card from your hand"}</h3>
                   {!selectedCard ? (
-                    <p className="muted-copy">Selecting a card reveals possible plays for sets, runs, or discard.</p>
+                        <p className="muted-copy">Selecting a card reveals possible plays for sets, runs, or discard.</p>
                   ) : (
                     <>
                       {suggestedMelds.length > 0 ? (
@@ -787,6 +818,15 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
                             <div className="suggestion-card" key={`${selectedCard.id}-${suggestion.kind}`}>
                               <strong>{suggestion.kind === "set" ? "Possible set" : "Possible run"}</strong>
                               <p>{suggestion.cards.map((card) => cardLabel(card)).join(" · ")}</p>
+                              {canMeld ? (
+                                <button
+                                  className="button button-secondary"
+                                  onClick={() => startTransition(() => void playSuggestedMeld(suggestion.cards.map((card) => card.id)))}
+                                  type="button"
+                                >
+                                  Play {suggestion.kind}
+                                </button>
+                              ) : null}
                             </div>
                           ))}
                         </div>
@@ -886,9 +926,9 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
                       <div className="meld-zone">
                         <div className="meld-slot">
                           <p className="eyebrow">Sets</p>
-                          {round.table_melds?.length ? (
+                          {tableSets.length ? (
                             <div className="meld-preview-row">
-                              {round.table_melds.map((meld, index) => (
+                              {tableSets.map((meld, index) => (
                                 <div className="meld-preview" key={`${meld.type ?? "meld"}-${index}`}>
                                   {(meld.cards ?? []).map((card) => (
                                     <PlayingCardFace card={card} key={card.id} size="tiny" />
@@ -902,17 +942,18 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
                         </div>
                         <div className="meld-slot">
                           <p className="eyebrow">Runs</p>
-                          {selectedCard && suggestedMelds.length > 0 ? (
-                            <div className="suggestion-list">
-                              {suggestedMelds.map((suggestion) => (
-                                <div className="suggestion-card" key={`table-${suggestion.kind}`}>
-                                  <strong>{suggestion.kind === "set" ? "Preview set" : "Preview run"}</strong>
-                                  <p>{suggestion.cards.map((card) => cardLabel(card)).join(" · ")}</p>
+                          {tableRuns.length ? (
+                            <div className="meld-preview-row">
+                              {tableRuns.map((meld, index) => (
+                                <div className="meld-preview" key={`${meld.type ?? "meld"}-${index}`}>
+                                  {(meld.cards ?? []).map((card) => (
+                                    <PlayingCardFace card={card} key={card.id} size="tiny" />
+                                  ))}
                                 </div>
                               ))}
                             </div>
                           ) : (
-                            <span className="muted-copy">Select a card to see possible runs or sets.</span>
+                            <span className="muted-copy">Room for runs.</span>
                           )}
                         </div>
                       </div>
@@ -927,6 +968,26 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
                       </div>
                       <span className="stat-pill">{hand.length} cards</span>
                     </div>
+
+                    {selectedCard && suggestedMelds.length > 0 ? (
+                      <div className="suggestion-table-strip">
+                        {suggestedMelds.map((suggestion) => (
+                          <div className="suggestion-card" key={`table-${suggestion.kind}`}>
+                            <strong>{suggestion.kind === "set" ? "Possible set" : "Possible run"}</strong>
+                            <p>{suggestion.cards.map((card) => cardLabel(card)).join(" · ")}</p>
+                            {canMeld ? (
+                              <button
+                                className="button button-secondary"
+                                onClick={() => startTransition(() => void playSuggestedMeld(suggestion.cards.map((card) => card.id)))}
+                                type="button"
+                              >
+                                Play {suggestion.kind}
+                              </button>
+                            ) : null}
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
 
                     <div className="hand-fan">
                       {hand.length > 0 ? (

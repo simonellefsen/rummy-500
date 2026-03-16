@@ -640,6 +640,13 @@ a {
   gap: 0.7rem;
 }
 
+.suggestion-table-strip {
+  display: grid;
+  gap: 0.8rem;
+  margin-bottom: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
 .suggestion-card {
   display: grid;
   gap: 0.35rem;
