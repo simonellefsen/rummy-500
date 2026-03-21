@@ -955,9 +955,10 @@ a {
   position: absolute;
   inset: 15% 13% 15%;
   display: grid;
-  grid-template-rows: auto 1fr;
+  grid-template-rows: auto auto minmax(0, 1fr);
   gap: 1.25rem;
-  align-content: center;
+  align-content: stretch;
+  overflow: hidden;
 }
 
 .center-piles {
@@ -965,6 +966,8 @@ a {
   justify-content: center;
   align-items: stretch;
   gap: 1.5rem;
+  justify-self: center;
+  width: 100%;
 }
 
 .table-pile {
@@ -972,8 +975,8 @@ a {
   justify-items: center;
   align-content: center;
   gap: 0.55rem;
-  width: 180px;
-  min-height: 240px;
+  width: 150px;
+  min-height: 190px;
   border-radius: 26px;
   border: 1px solid rgba(244, 231, 190, 0.12);
   background: rgba(5, 25, 17, 0.42);
@@ -997,10 +1000,10 @@ a {
 }
 
 .pile-discard-spread {
-  width: min(360px, 100%);
-  min-height: 240px;
+  width: min(300px, 100%);
+  min-height: 190px;
   align-content: start;
-  padding: 0.9rem;
+  padding: 0.75rem;
 }
 
 .table-pile .cardmeister-shell,
@@ -1033,7 +1036,7 @@ a {
   justify-content: flex-start;
   overflow-x: auto;
   width: 100%;
-  padding: 0 0.4rem 0.2rem 1rem;
+  padding: 0 0.3rem 0.2rem 0.75rem;
 }
 
 .discard-card-button {
@@ -1045,7 +1048,7 @@ a {
   color: var(--text);
   padding: 0;
   flex: 0 0 auto;
-  margin-left: -1rem;
+  margin-left: -0.75rem;
   position: relative;
 }
 
@@ -1100,6 +1103,10 @@ a {
   display: grid;
   gap: 1rem;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  min-height: 0;
+  overflow: auto;
+  align-content: start;
+  padding-right: 0.35rem;
 }
 
 .table-turn-prompt {
@@ -1118,7 +1125,7 @@ a {
   display: grid;
   align-content: start;
   gap: 0.85rem;
-  min-height: 180px;
+  min-height: 0;
   border-radius: 26px;
   border: 1px dashed rgba(244, 231, 190, 0.22);
   background: rgba(5, 25, 17, 0.24);
@@ -1285,18 +1292,18 @@ a {
 }
 
 .cardmeister-shell.hand {
-  width: 104px;
-  height: 148px;
+  width: 78px;
+  height: 111px;
 }
 
 .cardmeister-shell.mini {
-  width: 90px;
-  height: 128px;
+  width: 68px;
+  height: 96px;
 }
 
 .cardmeister-shell.tiny {
-  width: 68px;
-  height: 94px;
+  width: 51px;
+  height: 71px;
 }
 
 .cardmeister-shell.is-selected {
