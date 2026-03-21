@@ -136,13 +136,6 @@ Deno.serve(async (request) => {
       );
     }
 
-    if (!players.every((player) => player.ready)) {
-      return Response.json(
-        { error: "Every seated player must mark ready before the game can start." },
-        { status: 409, headers: corsHeaders }
-      );
-    }
-
     const playerCount = players.length;
     const config = {
       decks: typeof game.config?.decks === "number" ? game.config.decks : playerCount >= 5 ? 2 : 1,

@@ -788,8 +788,7 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
     !!game &&
     game.status === "lobby" &&
     game.host_user_id === currentUser.id &&
-    players.length >= 2 &&
-    players.every((player) => player.ready);
+    players.length >= 2;
   const discardTop = round?.discard_pile?.at(-1) ?? null;
   const discardCount = round?.discard_pile?.length ?? 0;
   const mobileTopPlayer = otherPlayers[0] ?? null;
@@ -817,8 +816,8 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
         </div>
         <h1>{game ? `Lobby ${game.invite_code}` : "Loading lobby"}</h1>
         <p className="hero-copy">
-          Create players, mark ready, and start the first hand from a server-authoritative Edge
-          Function once everyone in the lobby is prepared.
+          Seat players and start the first hand from a server-authoritative Edge Function once at
+          least two players have joined the lobby.
         </p>
       </section>
 
@@ -1152,7 +1151,7 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
                   <div className="mobile-settings-card">
                     <strong>Lobby</strong>
                     <p>Invite players with code <code>{game?.invite_code ?? "----"}</code>.</p>
-                    <p>{players.length} seated. Host can start once all seated players are ready.</p>
+                    <p>{players.length} seated. Host can start once at least two players are seated.</p>
                   </div>
 
                   <div className="mobile-settings-card">
