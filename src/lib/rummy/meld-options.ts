@@ -15,6 +15,18 @@ export interface SuggestedLayoff {
   points: number;
 }
 
+export type SuggestedDiscardPickupUse =
+  | {
+      type: "meld";
+      kind: "set" | "run";
+      cardIds: string[];
+    }
+  | {
+      type: "layoff";
+      kind: "set" | "run";
+      meldIndex: number;
+    };
+
 export function findSuggestedMelds(hand: Card[], selectedCardId: string): SuggestedMeld[] {
   const selectedCard = hand.find((card) => card.id === selectedCardId);
 
@@ -66,6 +78,65 @@ export function findSuggestedLayoffs(tableMelds: TableMeld[], selectedCard: Card
       card: selectedCard,
       targetCards,
       points: result.points
+    });
+  }
+
+  return suggestions;
+}
+
+export function findDiscardPickupUses(hand: Card[], tableMelds: TableMeld[], requiredCardId: string): SuggestedDiscardPickupUse[] {
+  const requiredCard = hand.find((card) => card.id === requiredCardId);
+
+  if (!requiredCard) {
+    return [];
+  }
+
+  const suggestions: SuggestedDiscardPickupUse[] = [];
+  const otherCards = hand.filter((card) => card.id !== requiredCardId);
+  const seenMelds = new Set<string>();
+
+  for (const comboSize of [2, 3]) {
+    for (const combo of buildCombinations(otherCards, comboSize)) {
+      const candidate = [requiredCard, ...combo];
+      const result = analyzeMeld(candidate);
+
+      if (!result.isValid || result.kind === "invalid") {
+        continue;
+      }
+
+      const suggestionKey = `${result.kind}:${candidate
+        .map((card) => card.id)
+        .sort()
+        .join(",")}`;
+
+      if (seenMelds.has(suggestionKey)) {
+        continue;
+      }
+
+      seenMelds.add(suggestionKey);
+      suggestions.push({
+        type: "meld",
+        kind: result.kind,
+        cardIds: candidate.map((card) => card.id)
+      });
+    }
+  }
+
+  for (const [meldIndex, meld] of tableMelds.entries()) {
+    if (!meld.type || !Array.isArray(meld.cards) || meld.cards.length < 3) {
+      continue;
+    }
+
+    const result = analyzeMeld([...meld.cards, requiredCard]);
+
+    if (!result.isValid || result.kind === "invalid" || result.kind !== meld.type) {
+      continue;
+    }
+
+    suggestions.push({
+      type: "layoff",
+      kind: meld.type,
+      meldIndex
     });
   }
 

@@ -6,7 +6,7 @@ import { useEffect, useState, useTransition } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 
 import { cardLabel } from "../lib/rummy/cards";
-import { findSuggestedLayoffs, findSuggestedMelds } from "../lib/rummy/meld-options";
+import { findDiscardPickupUses, findSuggestedLayoffs, findSuggestedMelds } from "../lib/rummy/meld-options";
 import type { Card, TableMeld } from "../lib/rummy/types";
 import { createBrowserSupabaseClient } from "../lib/supabase/client";
 import { getPublicSupabaseEnv } from "../lib/supabase/env";
@@ -17,6 +17,7 @@ interface GameRow {
   status: string;
   host_user_id: string;
   winner_user_id: string | null;
+  required_pickup_card_id: string | null;
   turn_user_id: string | null;
   turn_stage: "awaiting_draw" | "awaiting_discard";
   round_number: number;
@@ -317,7 +318,7 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
             supabase
               .schema("rummy500")
               .from("games")
-              .select("id, invite_code, status, host_user_id, winner_user_id, turn_user_id, turn_stage, round_number, config, started_at")
+              .select("id, invite_code, status, host_user_id, winner_user_id, required_pickup_card_id, turn_user_id, turn_stage, round_number, config, started_at")
               .eq("id", gameId)
               .single(),
             supabase
@@ -456,6 +457,23 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
     };
   }, [gameId, session?.user.id]);
 
+  useEffect(() => {
+    const requiredCardId =
+      typeof game?.required_pickup_card_id === "string" && game.required_pickup_card_id.trim()
+        ? game.required_pickup_card_id.trim()
+        : null;
+
+    if (!requiredCardId) {
+      return;
+    }
+
+    if (!hand.some((card) => card.id === requiredCardId)) {
+      return;
+    }
+
+    setSelectedCardId((currentSelected) => (currentSelected === requiredCardId ? currentSelected : requiredCardId));
+  }, [game?.required_pickup_card_id, hand]);
+
   async function refreshLobby() {
     const currentUserId = session?.user.id;
 
@@ -471,7 +489,7 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
         supabase
           .schema("rummy500")
           .from("games")
-          .select("id, invite_code, status, host_user_id, winner_user_id, turn_user_id, turn_stage, round_number, config, started_at")
+          .select("id, invite_code, status, host_user_id, winner_user_id, required_pickup_card_id, turn_user_id, turn_stage, round_number, config, started_at")
           .eq("id", gameId)
           .single(),
         supabase
@@ -645,6 +663,48 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
       setSelectedCardId(null);
     }
 
+    await refreshLobby();
+  }
+
+  async function drawDiscard(cardId?: string) {
+    setErrorMessage(null);
+    setStatusMessage(null);
+
+    const {
+      data: { session: currentSession },
+      error: sessionError
+    } = await supabase.auth.getSession();
+
+    if (sessionError) {
+      setErrorMessage(sessionError.message);
+      return;
+    }
+
+    if (!currentSession?.access_token) {
+      setErrorMessage("No Supabase session token is available in the browser.");
+      return;
+    }
+
+    const response = await postEdgeFunction("draw-discard", { gameId, cardId: cardId ?? null }, currentSession.access_token);
+
+    if (!response.ok) {
+      const message =
+        typeof response.body === "object" && response.body && "error" in response.body
+          ? String(response.body.error)
+          : response.rawBody || `draw-discard failed with status ${response.status}`;
+
+      setErrorMessage(message);
+      return;
+    }
+
+    const nextRequiredCardId =
+      typeof response.body === "object" && response.body && "cardId" in response.body ? String(response.body.cardId) : null;
+
+    if (nextRequiredCardId) {
+      setSelectedCardId(nextRequiredCardId);
+    }
+
+    setStatusMessage("Discard picked up. Use that card immediately in a meld or layoff.");
     await refreshLobby();
   }
 
@@ -828,6 +888,14 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
   const visibleDiscardPile = game?.config?.variants && typeof game.config.variants === "object"
     ? Boolean((game.config.variants as Record<string, unknown>).visibleDiscardPile)
     : false;
+  const requiredPickupCardId =
+    typeof game?.required_pickup_card_id === "string" && game.required_pickup_card_id.trim()
+      ? game.required_pickup_card_id.trim()
+      : null;
+  const requiredPickupUses = requiredPickupCardId
+    ? findDiscardPickupUses(hand, round?.table_melds ?? [], requiredPickupCardId)
+    : [];
+  const selectedCardIsRequiredPickup = selectedCard?.id === requiredPickupCardId;
   const handFinished = round?.status === "finished";
   const matchFinished = game?.status === "finished";
   const startHandLabel = handFinished ? "Start next hand" : "Start hand";
@@ -845,6 +913,12 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
   const mobileRightPlayer = otherPlayers[2] ?? null;
   const mobilePrompt = statusMessage
     ? statusMessage
+    : requiredPickupCardId
+      ? selectedCardIsRequiredPickup
+        ? `Use the picked discard immediately in a meld or layoff before you do anything else.${
+            requiredPickupUses.length > 0 ? ` ${requiredPickupUses.length} play option${requiredPickupUses.length === 1 ? "" : "s"} available.` : ""
+          }`
+        : "The discard you picked must be used immediately. Tap that card to play it now."
     : canDraw
       ? visibleDiscardPile
         ? "It's your turn. Draw from the stock or tap any discard card to take it and every card above it."
@@ -857,7 +931,13 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
           : "It's your turn. Select a card to see meld options, or pick a card to discard."
         : `${activeTurnLabel} is up next.`;
   const desktopPrompt =
-    canDraw
+    requiredPickupCardId
+      ? selectedCardIsRequiredPickup
+        ? `You picked from discard. Use that card immediately in a meld or layoff before discarding.${
+            requiredPickupUses.length > 0 ? ` ${requiredPickupUses.length} valid play option${requiredPickupUses.length === 1 ? "" : "s"} found.` : ""
+          }`
+        : "The picked discard must be used immediately. Select that card to finish the move."
+      : canDraw
       ? visibleDiscardPile
         ? "Your turn: draw from stock or choose any discard card to take that card plus all newer discards."
         : "Your turn: draw from the stock or take the top discard."
@@ -1163,7 +1243,8 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
                                     className="discard-card-button"
                                     disabled={!canDraw || isPending}
                                     key={card.id}
-                                    onClick={() => startTransition(() => void playTurnAction("draw_discard_stack", card.id))}
+                                    onClick={() => startTransition(() => void drawDiscard(card.id))}
+                                    style={{ zIndex: index + 1 }}
                                     type="button"
                                   >
                                     <PlayingCardFace card={card} size="tiny" />
@@ -1181,7 +1262,7 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
                           <button
                             className="table-pile pile-discard"
                             disabled={!canDraw || isPending || discardCount === 0}
-                            onClick={() => startTransition(() => void playTurnAction("draw_discard_top"))}
+                            onClick={() => startTransition(() => void drawDiscard())}
                             type="button"
                           >
                             <span className="pile-label">Discard</span>
@@ -1505,7 +1586,8 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
                             className="mobile-discard-card"
                             disabled={!canDraw || isPending}
                             key={card.id}
-                            onClick={() => startTransition(() => void playTurnAction("draw_discard_stack", card.id))}
+                            onClick={() => startTransition(() => void drawDiscard(card.id))}
+                            style={{ zIndex: index + 1 }}
                             type="button"
                           >
                             <PlayingCardFace card={card} size="tiny" />
@@ -1520,7 +1602,7 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
                     <button
                       className="mobile-pile-button"
                       disabled={!canDraw || isPending || discardCount === 0}
-                      onClick={() => startTransition(() => void playTurnAction("draw_discard_top"))}
+                      onClick={() => startTransition(() => void drawDiscard())}
                       type="button"
                     >
                       {discardTop ? <PlayingCardFace card={discardTop} size="mini" /> : <div className="pile-stack">Empty</div>}

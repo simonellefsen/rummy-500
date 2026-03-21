@@ -24,6 +24,13 @@ export interface MeldAnalysis {
   reason?: string;
 }
 
+export interface SuggestedDiscardPickupUse {
+  type: "meld" | "layoff";
+  kind: "set" | "run";
+  cardIds?: string[];
+  meldIndex?: number;
+}
+
 export function scoreCard(card: Card) {
   if (card.isJoker || card.rank === "A") {
     return 15;
@@ -80,6 +87,61 @@ export function analyzeLayoff(meld: TableMeld, card: Card): MeldAnalysis {
   }
 
   return result;
+}
+
+export function findDiscardPickupUses(hand: Card[], tableMelds: TableMeld[], requiredCardId: string): SuggestedDiscardPickupUse[] {
+  const requiredCard = hand.find((card) => card.id === requiredCardId);
+
+  if (!requiredCard) {
+    return [];
+  }
+
+  const suggestions: SuggestedDiscardPickupUse[] = [];
+  const otherCards = hand.filter((card) => card.id !== requiredCardId);
+  const seenMelds = new Set<string>();
+
+  for (const comboSize of [2, 3]) {
+    for (const combo of buildCombinations(otherCards, comboSize)) {
+      const candidate = [requiredCard, ...combo];
+      const result = analyzeMeld(candidate);
+
+      if (!result.isValid || result.kind === "invalid") {
+        continue;
+      }
+
+      const suggestionKey = `${result.kind}:${candidate
+        .map((card) => card.id)
+        .sort()
+        .join(",")}`;
+
+      if (seenMelds.has(suggestionKey)) {
+        continue;
+      }
+
+      seenMelds.add(suggestionKey);
+      suggestions.push({
+        type: "meld",
+        kind: result.kind,
+        cardIds: candidate.map((card) => card.id)
+      });
+    }
+  }
+
+  for (const [meldIndex, meld] of tableMelds.entries()) {
+    const result = analyzeLayoff(meld, requiredCard);
+
+    if (!result.isValid || result.kind === "invalid") {
+      continue;
+    }
+
+    suggestions.push({
+      type: "layoff",
+      kind: result.kind,
+      meldIndex
+    });
+  }
+
+  return suggestions;
 }
 
 function analyzeSet(cards: Card[]): MeldAnalysis {
@@ -204,4 +266,18 @@ function invalidMeld(reason: string): MeldAnalysis {
     points: 0,
     reason
   };
+}
+
+function buildCombinations(cards: Card[], size: number, start = 0, prefix: Card[] = []): Card[][] {
+  if (size === 0) {
+    return [prefix];
+  }
+
+  const combinations: Card[][] = [];
+
+  for (let index = start; index <= cards.length - size; index += 1) {
+    combinations.push(...buildCombinations(cards, size - 1, index + 1, [...prefix, cards[index]]));
+  }
+
+  return combinations;
 }

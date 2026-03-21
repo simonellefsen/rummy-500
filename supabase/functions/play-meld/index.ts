@@ -59,7 +59,7 @@ Deno.serve(async (request) => {
     const { data: game, error: gameError } = await supabase
       .schema("rummy500")
       .from("games")
-      .select("id, status, turn_user_id, turn_stage, round_number, config")
+      .select("id, status, turn_user_id, turn_stage, round_number, config, required_pickup_card_id")
       .eq("id", body.gameId)
       .single();
 
@@ -110,9 +110,20 @@ Deno.serve(async (request) => {
     const cards = (handRow.cards ?? []) as Card[];
     const selectedIds = [...new Set(body.cardIds)];
     const selectedCards = cards.filter((card) => selectedIds.includes(card.id));
+    const requiredPickupCardId =
+      typeof game.required_pickup_card_id === "string" && game.required_pickup_card_id.trim()
+        ? game.required_pickup_card_id.trim()
+        : null;
 
     if (selectedCards.length !== selectedIds.length) {
       return Response.json({ error: "One or more selected cards are not in the current hand." }, { status: 400, headers: corsHeaders });
+    }
+
+    if (requiredPickupCardId && !selectedIds.includes(requiredPickupCardId)) {
+      return Response.json(
+        { error: "You must use the picked discard in a meld or layoff before making any other play." },
+        { status: 409, headers: corsHeaders }
+      );
     }
 
     const meld = analyzeMeld(selectedCards);
@@ -200,6 +211,18 @@ Deno.serve(async (request) => {
 
     if (updateRoundError) {
       throw updateRoundError;
+    }
+
+    if (requiredPickupCardId) {
+      const { error: updateGameError } = await supabase
+        .schema("rummy500")
+        .from("games")
+        .update({ required_pickup_card_id: null })
+        .eq("id", body.gameId);
+
+      if (updateGameError) {
+        throw updateGameError;
+      }
     }
 
     const { error: actionError } = await supabase.schema("rummy500").from("game_actions").insert({

@@ -268,6 +268,7 @@ Deno.serve(async (request) => {
         winner_user_id: null,
         turn_user_id: firstTurn.user_id,
         turn_stage: "awaiting_draw",
+        required_pickup_card_id: null,
         started_at: new Date().toISOString(),
         finished_at: null
       })
