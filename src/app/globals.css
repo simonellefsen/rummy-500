@@ -906,11 +906,26 @@ a {
   opacity: 0.65;
 }
 
+.table-pile .cardmeister-shell,
+.table-pile .pile-stack,
+.table-pile .pile-stack-back,
+.hand-playing-card .cardmeister-shell,
+.mobile-hand-card-button .cardmeister-shell,
+.mobile-pile-button .cardmeister-shell,
+.mobile-pile-button .pile-stack {
+  pointer-events: none;
+}
+
 .pile-label {
   text-transform: uppercase;
   letter-spacing: 0.14em;
   color: var(--gold);
   font-size: 0.78rem;
+}
+
+.pile-hint {
+  color: var(--muted);
+  font-size: 0.86rem;
 }
 
 .pile-stack,
@@ -954,6 +969,18 @@ a {
   display: grid;
   gap: 1rem;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.table-turn-prompt {
+  margin: 0;
+  justify-self: center;
+  width: min(100%, 42rem);
+  border-radius: 999px;
+  border: 1px solid rgba(244, 231, 190, 0.16);
+  background: rgba(5, 25, 17, 0.38);
+  color: var(--text);
+  padding: 0.8rem 1rem;
+  text-align: center;
 }
 
 .meld-slot {
@@ -1012,6 +1039,18 @@ a {
   gap: 0.8rem;
   margin-bottom: 1rem;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.desktop-action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.desktop-action-row .button {
+  min-width: 9rem;
 }
 
 .suggestion-card {

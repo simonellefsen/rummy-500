@@ -804,6 +804,14 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
           ? "Selected card can form a meld. Play it or discard another card."
           : "It's your turn. Select a card to see meld options, or pick a card to discard."
         : `${activeTurnLabel} is up next.`;
+  const desktopPrompt =
+    canDraw
+      ? "Your turn: draw from the stock or take the top discard."
+      : canMeld
+        ? selectedCard && suggestedMelds.length > 0
+          ? "Selected card can be melded. Play it or discard to end your turn."
+          : "Your turn: select a card in your hand, then meld or discard."
+        : `${activeTurnLabel} is up next.`;
 
   return (
     <main className="page-shell">
@@ -1044,6 +1052,7 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
                         >
                           <span className="pile-label">Stock</span>
                           <StockCardBack />
+                          <span className="pile-hint">Draw from deck</span>
                           <strong>{round.stock_count}</strong>
                         </button>
 
@@ -1059,9 +1068,12 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
                           ) : (
                             <div className="pile-stack">Empty</div>
                           )}
+                          <span className="pile-hint">Take top card</span>
                           <strong>{discardCount}</strong>
                         </button>
                       </div>
+
+                      <p className="table-turn-prompt">{desktopPrompt}</p>
 
                       <div className="meld-zone">
                         <div className="meld-slot">
@@ -1128,6 +1140,36 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
                         ))}
                       </div>
                     ) : null}
+
+                    <div className="desktop-action-row">
+                      <button
+                        className="button"
+                        disabled={!canMeld || !selectedCard || suggestedMelds.length === 0}
+                        onClick={() => startTransition(() => void playSuggestedMeld(suggestedMelds[0].cards.map((card) => card.id)))}
+                        type="button"
+                      >
+                        Meld
+                      </button>
+                      <button
+                        className="button button-secondary"
+                        disabled={!canDiscard || !selectedCard}
+                        onClick={() => startTransition(() => void playTurnAction("discard_card", selectedCard?.id))}
+                        type="button"
+                      >
+                        Discard
+                      </button>
+                      <button
+                        className="button button-ghost"
+                        onClick={() =>
+                          setHandSortMode((currentSortMode) =>
+                            currentSortMode === "rank" ? "suit" : currentSortMode === "suit" ? "natural" : "rank"
+                          )
+                        }
+                        type="button"
+                      >
+                        Sort
+                      </button>
+                    </div>
 
                     <div className="hand-fan">
                       {hand.length > 0 ? (
