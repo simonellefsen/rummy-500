@@ -224,8 +224,25 @@ function PlayingCardFace({
     return (
       <div className={`cardmeister-shell ${size} ${selected ? "is-selected" : ""}`}>
         <div className="joker-card-face">
-          <span>JOKER</span>
-          <small>Wild</small>
+          <span className="joker-side joker-side-left">JOKER</span>
+          <div className="joker-center-art" aria-hidden="true">
+            <div className="joker-hat">
+              <span className="joker-horn joker-horn-left"></span>
+              <span className="joker-horn joker-horn-middle"></span>
+              <span className="joker-horn joker-horn-right"></span>
+            </div>
+            <div className="joker-head">
+              <span className="joker-eye joker-eye-left"></span>
+              <span className="joker-eye joker-eye-right"></span>
+              <span className="joker-smile"></span>
+            </div>
+            <div className="joker-collar">
+              <span></span>
+              <span></span>
+              <span></span>
+            </div>
+          </div>
+          <span className="joker-side joker-side-right">JOKER</span>
         </div>
       </div>
     );
@@ -233,7 +250,7 @@ function PlayingCardFace({
 
   return (
     <div className={`cardmeister-shell ${size} ${selected ? "is-selected" : ""}`}>
-      <playing-card cid={cid} bordercolor="#cabf9d" borderradius="14" borderline="1" opacity="1"></playing-card>
+      <playing-card cid={cid} bordercolor="#cabf9d" borderradius="0" borderline="1" opacity="1"></playing-card>
     </div>
   );
 }
@@ -247,7 +264,7 @@ function StockCardBack() {
         backtext="500"
         backtextcolor="#f5f2ea"
         bordercolor="#cabf9d"
-        borderradius="14"
+        borderradius="0"
         borderline="1"
       ></playing-card>
     </div>

@@ -1249,7 +1249,7 @@ a {
   display: inline-block;
   width: 104px;
   height: 148px;
-  border-radius: 16px;
+  border-radius: 0;
   overflow: hidden;
   box-shadow: 0 16px 24px rgba(0, 0, 0, 0.18);
 }
@@ -1286,24 +1286,171 @@ a {
 .joker-card-face {
   width: 100%;
   height: 100%;
-  display: inline-flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: 0.95rem 1fr 0.95rem;
+  align-items: stretch;
   align-items: center;
-  justify-content: center;
   border: 1px solid rgba(19, 31, 39, 0.16);
-  background: linear-gradient(180deg, #fffef9 0%, #f5f0e4 100%);
-  color: #a72424;
-  text-align: center;
-  font-family: var(--display-font);
-  font-weight: 700;
+  background:
+    linear-gradient(180deg, #fffef9 0%, #f5f0e4 100%);
+  color: #7e1e1e;
 }
 
-.joker-card-face small {
-  margin-top: 0.35rem;
-  color: #6c7076;
-  font-size: 0.88rem;
-  letter-spacing: 0.08em;
+.joker-side {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  font-family: var(--display-font);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
+  color: #8d2525;
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+}
+
+.joker-side-left {
+  transform: rotate(180deg);
+}
+
+.joker-side-right {
+  transform: none;
+}
+
+.joker-center-art {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 0.24rem;
+  width: 100%;
+  height: 100%;
+}
+
+.joker-hat {
+  position: relative;
+  width: 62%;
+  height: 22%;
+  margin-top: 8%;
+}
+
+.joker-horn {
+  position: absolute;
+  bottom: 0.08rem;
+  width: 0;
+  height: 0;
+  border-left: 0.36rem solid transparent;
+  border-right: 0.36rem solid transparent;
+  border-bottom: 0.85rem solid #bd2d2d;
+}
+
+.joker-horn::after {
+  content: "";
+  position: absolute;
+  left: -0.13rem;
+  top: -0.15rem;
+  width: 0.26rem;
+  height: 0.26rem;
+  border-radius: 50%;
+  background: #e7b750;
+  box-shadow: 0 0 0 1px rgba(108, 55, 5, 0.18);
+}
+
+.joker-horn-left {
+  left: 0;
+  transform: rotate(-18deg);
+}
+
+.joker-horn-middle {
+  left: 50%;
+  transform: translateX(-50%);
+  border-bottom-color: #1b1f8a;
+}
+
+.joker-horn-right {
+  right: 0;
+  transform: rotate(18deg);
+}
+
+.joker-head {
+  position: relative;
+  width: 42%;
+  height: 24%;
+  border: 1px solid rgba(62, 43, 29, 0.25);
+  border-radius: 50%;
+  background: #f4d7bc;
+  box-shadow: inset 0 -0.16rem 0 rgba(190, 119, 71, 0.15);
+}
+
+.joker-eye {
+  position: absolute;
+  top: 35%;
+  width: 0.12rem;
+  height: 0.12rem;
+  border-radius: 50%;
+  background: #2c3139;
+}
+
+.joker-eye-left {
+  left: 31%;
+}
+
+.joker-eye-right {
+  right: 31%;
+}
+
+.joker-smile {
+  position: absolute;
+  left: 50%;
+  bottom: 21%;
+  width: 34%;
+  height: 16%;
+  border-bottom: 1px solid #814531;
+  border-radius: 0 0 999px 999px;
+  transform: translateX(-50%);
+}
+
+.joker-collar {
+  display: flex;
+  gap: 0.1rem;
+  align-items: flex-start;
+  justify-content: center;
+}
+
+.joker-collar span {
+  width: 0;
+  height: 0;
+  border-left: 0.28rem solid transparent;
+  border-right: 0.28rem solid transparent;
+  border-top: 0.42rem solid #e7b750;
+}
+
+.hand-playing-card .joker-card-face,
+.mobile-hand-card-button .joker-card-face {
+  grid-template-columns: 0.8rem 1fr 0.8rem;
+}
+
+.cardmeister-shell.mini .joker-side,
+.cardmeister-shell.tiny .joker-side {
+  font-size: 0.54rem;
+}
+
+.cardmeister-shell.mini .joker-horn,
+.cardmeister-shell.tiny .joker-horn {
+  border-left-width: 0.24rem;
+  border-right-width: 0.24rem;
+  border-bottom-width: 0.56rem;
+}
+
+.cardmeister-shell.mini .joker-head,
+.cardmeister-shell.tiny .joker-head {
+  width: 46%;
+  height: 26%;
+}
+
+.cardmeister-shell.tiny .joker-card-face {
+  grid-template-columns: 0.58rem 1fr 0.58rem;
 }
 
 .hand-playing-card {
