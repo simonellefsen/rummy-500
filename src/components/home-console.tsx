@@ -348,6 +348,7 @@ export function HomeConsole() {
     const { data, error } = await supabase.schema("rummy500").rpc("create_game", {
       p_config: {
         max_players: maxPlayers,
+        target_score: 500,
         variants: {
           aceCanBeLow: true,
           aceCanBeHigh: true,

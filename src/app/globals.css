@@ -1094,6 +1094,45 @@ a {
   padding: 1rem;
 }
 
+.score-summary-card {
+  display: grid;
+  gap: 0.8rem;
+  border-radius: 24px;
+  border: 1px solid rgba(243, 239, 223, 0.12);
+  background: rgba(7, 21, 30, 0.62);
+  padding: 1rem;
+}
+
+.score-summary-card h3 {
+  margin: 0;
+  font-family: var(--display-font);
+  font-size: 1.3rem;
+}
+
+.score-summary-grid {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.score-summary-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) auto auto;
+  gap: 0.75rem;
+  align-items: center;
+  border-radius: 16px;
+  background: rgba(243, 239, 223, 0.06);
+  padding: 0.75rem 0.85rem;
+}
+
+.score-summary-row strong {
+  min-width: 0;
+}
+
+.score-summary-row span {
+  color: var(--muted);
+  white-space: nowrap;
+}
+
 .selection-panel h3 {
   margin: 0;
   font-family: var(--display-font);
@@ -1437,6 +1476,11 @@ a {
   .ready-overlay-actions {
     display: grid;
     grid-template-columns: 1fr;
+  }
+
+  .score-summary-row {
+    grid-template-columns: 1fr;
+    gap: 0.2rem;
   }
 
   .mobile-back-stack .cardmeister-shell,

@@ -106,7 +106,7 @@ Deno.serve(async (request) => {
     const { data: game, error: gameError } = await supabase
       .schema("rummy500")
       .from("games")
-      .select("id, host_user_id, status, config, round_number")
+      .select("id, host_user_id, status, config, round_number, winner_user_id")
       .eq("id", body.gameId)
       .single();
 
@@ -138,6 +138,7 @@ Deno.serve(async (request) => {
 
     const playerCount = players.length;
     const existingVariants = typeof game.config?.variants === "object" && game.config.variants ? game.config.variants : {};
+    const targetScore = typeof game.config?.target_score === "number" ? game.config.target_score : 500;
     const config = {
       decks: typeof game.config?.decks === "number" ? game.config.decks : playerCount >= 5 ? 2 : 1,
       jokers: typeof game.config?.jokers === "number" ? game.config.jokers : playerCount >= 5 ? 4 : 2,
@@ -147,6 +148,7 @@ Deno.serve(async (request) => {
     const resolvedConfig = {
       ...(typeof game.config === "object" && game.config ? game.config : {}),
       ...config,
+      target_score: targetScore,
       variants: {
         aceCanBeLow: true,
         aceCanBeHigh: true,
@@ -158,6 +160,27 @@ Deno.serve(async (request) => {
         ...existingVariants
       }
     };
+
+    const { data: previousRound } = await supabase
+      .schema("rummy500")
+      .from("game_rounds")
+      .select("dealer_user_id")
+      .eq("game_id", body.gameId)
+      .eq("round_number", game.round_number)
+      .maybeSingle();
+
+    let dealer = players[0];
+
+    if (previousRound?.dealer_user_id) {
+      const previousDealerIndex = players.findIndex((player) => player.user_id === previousRound.dealer_user_id);
+
+      if (previousDealerIndex >= 0) {
+        dealer = players[(previousDealerIndex + 1) % players.length];
+      }
+    }
+
+    const dealerIndex = players.findIndex((player) => player.user_id === dealer.user_id);
+    const firstTurn = players[(dealerIndex + 1) % players.length];
 
     const roundNumber = Number(game.round_number) + 1;
     const cards = shuffle(createDeck(config.decks, config.jokers));
@@ -185,9 +208,6 @@ Deno.serve(async (request) => {
     if (!firstDiscard) {
       throw new Error("Deck exhausted before discard pile creation.");
     }
-
-    const dealer = players[0];
-    const firstTurn = players[(dealer.seat_index + 1) % players.length];
 
     const { data: round, error: roundError } = await supabase
       .schema("rummy500")
@@ -245,9 +265,11 @@ Deno.serve(async (request) => {
         status: "in_progress",
         config: resolvedConfig,
         round_number: roundNumber,
+        winner_user_id: null,
         turn_user_id: firstTurn.user_id,
         turn_stage: "awaiting_draw",
-        started_at: new Date().toISOString()
+        started_at: new Date().toISOString(),
+        finished_at: null
       })
       .eq("id", body.gameId);
 

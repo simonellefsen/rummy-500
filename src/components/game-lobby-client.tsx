@@ -612,7 +612,7 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
       return;
     }
 
-    setStatusMessage("Game started.");
+    setStatusMessage("Hand started.");
     await refreshLobby();
   }
 
@@ -823,9 +823,14 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
   const suggestedLayoffs = selectedCard ? findSuggestedLayoffs(round?.table_melds ?? [], selectedCard) : [];
   const tableSets = (round?.table_melds ?? []).filter((meld) => meld.type === "set");
   const tableRuns = (round?.table_melds ?? []).filter((meld) => meld.type === "run");
+  const gameConfig = (game?.config ?? {}) as Record<string, unknown>;
+  const targetScore = typeof gameConfig.target_score === "number" ? gameConfig.target_score : 500;
   const visibleDiscardPile = game?.config?.variants && typeof game.config.variants === "object"
     ? Boolean((game.config.variants as Record<string, unknown>).visibleDiscardPile)
     : false;
+  const handFinished = round?.status === "finished";
+  const matchFinished = game?.status === "finished";
+  const startHandLabel = handFinished ? "Start next hand" : "Start hand";
   const canStart =
     !!currentUser &&
     !!game &&
@@ -895,8 +900,12 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
               : "Your turn. Lay down a set or run, or discard to end it."
             : `${activeTurnLabel} is up next.`}
         </p>
-      ) : game?.status === "finished" && winnerLabel ? (
-        <p className="banner banner-success">{winnerLabel} went out and ended the hand.</p>
+      ) : matchFinished && winnerLabel ? (
+        <p className="banner banner-success">{winnerLabel} reached {targetScore} points and won the match.</p>
+      ) : handFinished && winnerLabel ? (
+        <p className="banner banner-success">
+          {winnerLabel} won the hand. Scores are updated and the host can start the next hand.
+        </p>
       ) : null}
 
       {!currentUser ? (
@@ -942,16 +951,16 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
                     Copy code
                   </button>
                   {game?.host_user_id === currentUser.id ? (
-                    <button
-                      className="button button-secondary"
-                      disabled={!canStart || isPending}
-                      onClick={() => startTransition(() => void startGame())}
-                      type="button"
-                    >
-                      Start hand
-                    </button>
-                  ) : null}
-                </div>
+                  <button
+                    className="button button-secondary"
+                    disabled={!canStart || isPending}
+                    onClick={() => startTransition(() => void startGame())}
+                    type="button"
+                  >
+                    {startHandLabel}
+                  </button>
+                ) : null}
+              </div>
               </section>
             </div>
           ) : null}
@@ -988,7 +997,7 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
                     onClick={() => startTransition(() => void startGame())}
                     type="button"
                   >
-                    Start game
+                    {startHandLabel}
                   </button>
                 ) : null}
               </div>
@@ -1006,6 +1015,23 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
                 <p>
                   <strong>Round:</strong> {game?.round_number ?? 0}
                 </p>
+                <p>
+                  <strong>Target:</strong> {targetScore}
+                </p>
+              </div>
+
+              <div className="score-summary-card">
+                <p className="eyebrow">Scoreboard</p>
+                <h3>First to {targetScore}</h3>
+                <div className="score-summary-grid">
+                  {players.map((player) => (
+                    <div className="score-summary-row" key={`score-${player.user_id}`}>
+                      <strong>{userLabel(player.user_id, profiles, currentUser)}</strong>
+                      <span>Hand {player.current_hand_score}</span>
+                      <span>Total {player.total_score}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
 
               <div className="stack">
@@ -1380,6 +1406,20 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
                     </div>
                   </div>
 
+                  <div className="mobile-settings-card">
+                    <strong>Scoreboard</strong>
+                    <p>First to {targetScore} wins the match.</p>
+                    <div className="score-summary-grid">
+                      {players.map((player) => (
+                        <div className="score-summary-row" key={`mobile-score-${player.user_id}`}>
+                          <strong>{userLabel(player.user_id, profiles, currentUser)}</strong>
+                          <span>Hand {player.current_hand_score}</span>
+                          <span>Total {player.total_score}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
                   {currentPlayer ? (
                     <div className="mobile-settings-grid">
                       <button
@@ -1396,7 +1436,7 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
                           onClick={() => startTransition(() => void startGame())}
                           type="button"
                         >
-                          Start hand
+                          {startHandLabel}
                         </button>
                       ) : null}
                     </div>
