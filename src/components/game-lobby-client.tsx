@@ -1308,14 +1308,14 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
 
               <div className="mobile-center-table">
                 <div className="mobile-meld-lane">
-                  {tableSets.slice(0, 1).map((meld, index) => (
+                  {tableSets.map((meld, index) => (
                     <div className="mobile-meld-stack" key={`mobile-set-${index}`}>
                       {(meld.cards ?? []).map((card) => (
                         <PlayingCardFace card={card} key={card.id} size="tiny" />
                       ))}
                     </div>
                   ))}
-                  {tableRuns.slice(0, 1).map((meld, index) => (
+                  {tableRuns.map((meld, index) => (
                     <div className="mobile-meld-stack" key={`mobile-run-${index}`}>
                       {(meld.cards ?? []).map((card) => (
                         <PlayingCardFace card={card} key={card.id} size="tiny" />
