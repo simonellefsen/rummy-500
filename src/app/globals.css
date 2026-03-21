@@ -108,6 +108,21 @@ a {
   gap: 0.7rem;
 }
 
+.joker-choice-card {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.joker-option-list {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.joker-option-button {
+  justify-content: flex-start;
+  text-align: left;
+}
+
 .hero-panel,
 .panel,
 .hand-panel {

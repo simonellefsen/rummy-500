@@ -6,7 +6,13 @@ import { useEffect, useState, useTransition } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 
 import { cardLabel } from "../lib/rummy/cards";
-import { findDiscardPickupUses, findSuggestedJokerRetrievals, findSuggestedLayoffs, findSuggestedMelds } from "../lib/rummy/meld-options";
+import {
+  findDiscardPickupUses,
+  findSuggestedJokerRetrievals,
+  findSuggestedLayoffs,
+  findSuggestedMelds,
+  type SuggestedMeld
+} from "../lib/rummy/meld-options";
 import type { Card, JokerBinding, TableMeld } from "../lib/rummy/types";
 import { createBrowserSupabaseClient } from "../lib/supabase/client";
 import { getPublicSupabaseEnv } from "../lib/supabase/env";
@@ -260,6 +266,18 @@ function JokerBindingNote({ binding }: { binding: JokerBinding }) {
   return <small className="joker-binding-note">{`${binding.rank}${binding.suit[0].toUpperCase()}`}</small>;
 }
 
+function formatBindingLabel(binding: JokerBinding) {
+  return `${binding.rank} of ${binding.suit}`;
+}
+
+function formatBindingSet(bindings: JokerBinding[]) {
+  if (bindings.length === 0) {
+    return "No joker declaration needed";
+  }
+
+  return bindings.map((binding, index) => `Joker ${index + 1}: ${formatBindingLabel(binding)}`).join(" · ");
+}
+
 function sortHandCards(hand: Card[], mode: "natural" | "rank" | "suit") {
   if (mode === "natural") {
     return hand;
@@ -299,6 +317,7 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [startGameDiagnostics, setStartGameDiagnostics] = useState<StartGameDiagnostics | null>(null);
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
+  const [jokerChoiceSuggestion, setJokerChoiceSuggestion] = useState<SuggestedMeld | null>(null);
   const [handSortMode, setHandSortMode] = useState<"natural" | "rank" | "suit">("rank");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -720,7 +739,7 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
     await refreshLobby();
   }
 
-  async function playSuggestedMeld(cardIds: string[]) {
+  async function playSuggestedMeld(cardIds: string[], jokerBindings?: JokerBinding[]) {
     setErrorMessage(null);
     setStatusMessage(null);
 
@@ -739,7 +758,11 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
       return;
     }
 
-    const response = await postEdgeFunction("play-meld", { gameId, cardIds }, currentSession.access_token);
+    const response = await postEdgeFunction(
+      "play-meld",
+      { gameId, cardIds, jokerBindings: jokerBindings ?? null },
+      currentSession.access_token
+    );
 
     if (!response.ok) {
       const message =
@@ -752,8 +775,18 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
     }
 
     setSelectedCardId(null);
+    setJokerChoiceSuggestion(null);
     setStatusMessage("Meld placed on the table.");
     await refreshLobby();
+  }
+
+  function requestPlaySuggestedMeld(suggestion: SuggestedMeld) {
+    if (suggestion.jokerBindingOptions.length > 1) {
+      setJokerChoiceSuggestion(suggestion);
+      return;
+    }
+
+    void playSuggestedMeld(suggestion.cards.map((card) => card.id), suggestion.jokerBindingOptions[0]);
   }
 
   async function playLayoff(meldIndex: number, cardId: string) {
@@ -1108,6 +1141,49 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
             </div>
           ) : null}
 
+          {jokerChoiceSuggestion ? (
+            <div className="ready-overlay joker-choice-overlay" role="presentation">
+              <section
+                aria-labelledby="joker-choice-title"
+                aria-modal="true"
+                className="ready-overlay-card joker-choice-card"
+                role="dialog"
+              >
+                <p className="eyebrow">Declare jokers</p>
+                <h2 id="joker-choice-title">Choose what each joker represents</h2>
+                <p className="ready-overlay-copy">
+                  {jokerChoiceSuggestion.cards.map((card) => cardLabel(card)).join(" · ")}
+                </p>
+                <div className="joker-option-list">
+                  {jokerChoiceSuggestion.jokerBindingOptions.map((bindings, index) => (
+                    <button
+                      className="button button-secondary joker-option-button"
+                      key={`joker-option-${index}`}
+                      onClick={() =>
+                        startTransition(() =>
+                          void playSuggestedMeld(
+                            jokerChoiceSuggestion.cards.map((card) => card.id),
+                            bindings
+                          )
+                        )
+                      }
+                      type="button"
+                    >
+                      {formatBindingSet(bindings)}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  className="button button-ghost"
+                  onClick={() => setJokerChoiceSuggestion(null)}
+                  type="button"
+                >
+                  Cancel
+                </button>
+              </section>
+            </div>
+          ) : null}
+
           <section className="table-layout-shell desktop-only">
             <aside className="panel table-sidebar">
               <div className="section-heading">
@@ -1194,10 +1270,10 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
                               {canMeld ? (
                                 <button
                                   className="button button-secondary"
-                                  onClick={() => startTransition(() => void playSuggestedMeld(suggestion.cards.map((card) => card.id)))}
+                                  onClick={() => startTransition(() => requestPlaySuggestedMeld(suggestion))}
                                   type="button"
                                 >
-                                  Play {suggestion.kind}
+                                  {suggestion.jokerBindingOptions.length > 1 ? "Declare joker" : `Play ${suggestion.kind}`}
                                 </button>
                               ) : null}
                             </div>
@@ -1436,10 +1512,10 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
                             {canMeld ? (
                               <button
                                 className="button button-secondary"
-                                onClick={() => startTransition(() => void playSuggestedMeld(suggestion.cards.map((card) => card.id)))}
+                                onClick={() => startTransition(() => requestPlaySuggestedMeld(suggestion))}
                                 type="button"
                               >
-                                Play {suggestion.kind}
+                                {suggestion.jokerBindingOptions.length > 1 ? "Declare joker" : `Play ${suggestion.kind}`}
                               </button>
                             ) : null}
                           </div>
@@ -1488,7 +1564,7 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
                         onClick={() =>
                           startTransition(() => {
                             if (primarySuggestedMeld) {
-                              return void playSuggestedMeld(primarySuggestedMeld.cards.map((card) => card.id));
+                              return requestPlaySuggestedMeld(primarySuggestedMeld);
                             }
 
                             if (primarySuggestedLayoff) {
@@ -1508,6 +1584,8 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
                       >
                         {primaryJokerRetrieval && !primarySuggestedMeld && !primarySuggestedLayoff
                           ? "Replace joker"
+                          : primarySuggestedMeld?.jokerBindingOptions.length && primarySuggestedMeld.jokerBindingOptions.length > 1
+                            ? "Declare joker"
                           : primarySuggestedLayoff && !primarySuggestedMeld
                             ? "Lay off"
                             : "Meld"}
@@ -1786,10 +1864,10 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
                       <button
                         className="button button-secondary"
                         key={`mobile-${suggestion.kind}`}
-                        onClick={() => startTransition(() => void playSuggestedMeld(suggestion.cards.map((card) => card.id)))}
+                        onClick={() => startTransition(() => requestPlaySuggestedMeld(suggestion))}
                         type="button"
                       >
-                        Play {suggestion.kind}
+                        {suggestion.jokerBindingOptions.length > 1 ? "Declare joker" : `Play ${suggestion.kind}`}
                       </button>
                     ))}
                     {suggestedLayoffs.map((suggestion) => (
@@ -1840,7 +1918,7 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
                   onClick={() =>
                     startTransition(() => {
                       if (primarySuggestedMeld) {
-                        return void playSuggestedMeld(primarySuggestedMeld.cards.map((card) => card.id));
+                        return requestPlaySuggestedMeld(primarySuggestedMeld);
                       }
 
                       if (primarySuggestedLayoff) {
@@ -1862,6 +1940,8 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
                   <small>
                     {primaryJokerRetrieval && !primarySuggestedMeld && !primarySuggestedLayoff
                       ? "Replace"
+                      : primarySuggestedMeld?.jokerBindingOptions.length && primarySuggestedMeld.jokerBindingOptions.length > 1
+                        ? "Declare"
                       : primarySuggestedLayoff && !primarySuggestedMeld
                         ? "Lay off"
                         : "Meld"}

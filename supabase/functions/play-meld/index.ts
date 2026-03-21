@@ -1,7 +1,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 import { corsHeaders } from "../_shared/cors.ts";
-import { analyzeMeld, type Card, type JokerBinding } from "../_shared/rummy.ts";
+import { analyzeMeld, getMeldBindingOptions, type Card, type JokerBinding } from "../_shared/rummy.ts";
 
 type TableMeld = {
   owner_user_id: string;
@@ -37,7 +37,7 @@ Deno.serve(async (request) => {
       return Response.json({ error: "Invalid authorization header." }, { status: 401, headers: corsHeaders });
     }
 
-    const body = (await request.json()) as { gameId?: string; cardIds?: string[] };
+    const body = (await request.json()) as { gameId?: string; cardIds?: string[]; jokerBindings?: JokerBinding[] };
 
     if (!body.gameId) {
       return Response.json({ error: "gameId is required." }, { status: 400, headers: corsHeaders });
@@ -133,6 +133,33 @@ Deno.serve(async (request) => {
       return Response.json({ error: meld.reason ?? "Invalid meld." }, { status: 400, headers: corsHeaders });
     }
 
+    const jokerBindingOptions = getMeldBindingOptions(selectedCards, meld.kind);
+    const submittedJokerBindings = Array.isArray(body.jokerBindings) ? body.jokerBindings : [];
+    let resolvedJokerBindings: JokerBinding[] = jokerBindingOptions[0] ?? [];
+
+    if (jokerBindingOptions.length > 1) {
+      if (submittedJokerBindings.length === 0) {
+        return Response.json(
+          { error: "This joker meld is ambiguous. Choose what each joker represents before playing it." },
+          { status: 409, headers: corsHeaders }
+        );
+      }
+
+      const submittedKey = normalizeJokerBindings(submittedJokerBindings);
+      const matchingOption = jokerBindingOptions.find((option) => normalizeJokerBindings(option) === submittedKey);
+
+      if (!matchingOption) {
+        return Response.json(
+          { error: "Submitted joker declaration is not valid for this meld." },
+          { status: 409, headers: corsHeaders }
+        );
+      }
+
+      resolvedJokerBindings = matchingOption;
+    } else if (submittedJokerBindings.length > 0) {
+      resolvedJokerBindings = submittedJokerBindings;
+    }
+
     const nextHand = cards.filter((card) => !selectedIds.includes(card.id));
     const mustDiscardToGoOut =
       typeof game.config?.variants?.mustDiscardToGoOut === "boolean" ? game.config.variants.mustDiscardToGoOut : true;
@@ -152,7 +179,7 @@ Deno.serve(async (request) => {
         cards: selectedCards,
         points: meld.points,
         created_at: new Date().toISOString(),
-        joker_bindings: meld.jokerBindings ?? []
+        joker_bindings: resolvedJokerBindings
       }
     ];
     const nextActionLog = [
@@ -235,7 +262,8 @@ Deno.serve(async (request) => {
       payload: {
         type: meld.kind,
         points: meld.points,
-        cards: selectedCards
+        cards: selectedCards,
+        joker_bindings: resolvedJokerBindings
       }
     });
 
@@ -280,3 +308,10 @@ Deno.serve(async (request) => {
     return Response.json({ error: message }, { status: 500, headers: corsHeaders });
   }
 });
+
+function normalizeJokerBindings(bindings: JokerBinding[]) {
+  return bindings
+    .map((binding) => `${binding.joker_id}:${binding.rank}:${binding.suit}`)
+    .sort()
+    .join("|");
+}

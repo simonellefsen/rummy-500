@@ -1,10 +1,11 @@
-import { analyzeLayoff, analyzeMeld } from "./rules";
-import type { Card, TableMeld } from "./types";
+import { analyzeLayoff, analyzeMeld, getMeldBindingOptions } from "./rules";
+import type { Card, JokerBinding, TableMeld } from "./types";
 
 export interface SuggestedMeld {
   kind: "set" | "run";
   cards: Card[];
   points: number;
+  jokerBindingOptions: JokerBinding[][];
 }
 
 export interface SuggestedLayoff {
@@ -57,7 +58,8 @@ export function findSuggestedMelds(hand: Card[], selectedCardId: string): Sugges
       suggestions.set(result.kind, {
         kind: result.kind,
         cards: candidate,
-        points: result.points
+        points: result.points,
+        jokerBindingOptions: getMeldBindingOptions(candidate, result.kind)
       });
     }
   }

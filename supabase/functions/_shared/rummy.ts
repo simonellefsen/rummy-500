@@ -176,24 +176,17 @@ function analyzeSet(cards: Card[]): MeldAnalysis {
     return invalidMeld("Sets cannot repeat the same suit.");
   }
 
-  const jokerCards = cards.filter((card) => card.isJoker);
-  const missingSuits = (["clubs", "diamonds", "hearts", "spades"] as Suit[]).filter((suit) => !suitSet.has(suit));
+  const jokerBindingOptions = getSetBindingOptions(cards);
 
-  if (jokerCards.length > missingSuits.length) {
+  if (jokerBindingOptions.length === 0) {
     return invalidMeld("Not enough distinct suits remain to place jokers in this set.");
   }
-
-  const jokerBindings = jokerCards.map((jokerCard, index) => ({
-    joker_id: jokerCard.id,
-    rank: targetRank as Exclude<Rank, "JOKER">,
-    suit: missingSuits[index]
-  }));
 
   return {
     kind: "set",
     isValid: true,
     points: scoreCards(cards),
-    jokerBindings
+    jokerBindings: jokerBindingOptions[0] ?? []
   };
 }
 
@@ -211,59 +204,26 @@ function analyzeRun(cards: Card[]): MeldAnalysis {
     return invalidMeld("Natural cards in a run must share the same suit.");
   }
 
-  const lowResolution = resolveRunJokers(naturals, jokerCards, "low");
-  const highResolution = resolveRunJokers(naturals, jokerCards, "high");
+  const jokerBindingOptions = getRunBindingOptions(cards);
 
-  if (!lowResolution && !highResolution) {
+  if (jokerBindingOptions.length === 0) {
     return invalidMeld("Cards do not form a valid run.");
   }
-
-  const resolution =
-    highResolution && lowResolution
-      ? highResolution.values.at(-1)! >= lowResolution.values.at(-1)!
-        ? highResolution
-        : lowResolution
-      : highResolution ?? lowResolution;
 
   return {
     kind: "run",
     isValid: true,
     points: scoreCards(cards),
-    jokerBindings: resolution?.jokerBindings ?? []
+    jokerBindings: jokerBindingOptions[0] ?? []
   };
 }
 
-function canFormRun(cards: Card[], jokers: number, aceMode: "low" | "high") {
-  const values = cards.map((card) => rankToSequenceValue(card.rank, aceMode)).sort((left, right) => left - right);
-  const duplicates = new Set(values);
-
-  if (duplicates.size !== values.length) {
-    return false;
+export function getMeldBindingOptions(cards: Card[], kind: "set" | "run"): JokerBinding[][] {
+  if (!cards.some((card) => card.isJoker)) {
+    return [[]];
   }
 
-  let gapsToFill = 0;
-
-  for (let index = 1; index < values.length; index += 1) {
-    const gap = values[index] - values[index - 1] - 1;
-
-    if (gap < 0) {
-      return false;
-    }
-
-    gapsToFill += gap;
-  }
-
-  if (gapsToFill > jokers) {
-    return false;
-  }
-
-  const minimumValue = values[0];
-  const maximumValue = values[values.length - 1];
-  const leftoverJokers = jokers - gapsToFill;
-  const roomBelow = aceMode === "low" ? minimumValue - 1 : minimumValue - 2;
-  const roomAbove = aceMode === "high" ? 14 - maximumValue : 13 - maximumValue;
-
-  return leftoverJokers <= roomBelow + roomAbove;
+  return kind === "set" ? getSetBindingOptions(cards) : getRunBindingOptions(cards);
 }
 
 function rankToSequenceValue(rank: Rank, aceMode: "low" | "high") {
@@ -323,67 +283,124 @@ function resolveMeldCards(meld: TableMeld): Card[] {
   });
 }
 
-function resolveRunJokers(cards: Card[], jokerCards: Card[], aceMode: "low" | "high") {
+function getSetBindingOptions(cards: Card[]): JokerBinding[][] {
+  const naturals = cards.filter((card) => !card.isJoker);
+  const jokerCards = cards.filter((card) => card.isJoker);
+
+  if (jokerCards.length === 0) {
+    return [[]];
+  }
+
+  const targetRank = naturals[0]?.rank;
+
+  if (!targetRank) {
+    return [];
+  }
+
+  const suitSet = new Set(naturals.map((card) => card.suit));
+  const missingSuits = (["clubs", "diamonds", "hearts", "spades"] as Suit[]).filter((suit) => !suitSet.has(suit));
+
+  if (jokerCards.length > missingSuits.length) {
+    return [];
+  }
+
+  return permuteSuits(missingSuits, jokerCards.length).map((suits) =>
+    jokerCards.map((jokerCard, index) => ({
+      joker_id: jokerCard.id,
+      rank: targetRank as Exclude<Rank, "JOKER">,
+      suit: suits[index]
+    }))
+  );
+}
+
+function getRunBindingOptions(cards: Card[]): JokerBinding[][] {
+  const naturals = cards.filter((card) => !card.isJoker);
+  const jokerCards = cards.filter((card) => card.isJoker);
+
+  const lowResolutions = enumerateRunResolutions(naturals, jokerCards, "low");
+  const highResolutions = enumerateRunResolutions(naturals, jokerCards, "high");
+  const byKey = new Map<string, { values: number[]; jokerBindings: JokerBinding[] }>();
+
+  for (const resolution of [...lowResolutions, ...highResolutions]) {
+    const key = resolution.jokerBindings
+      .map((binding) => `${binding.joker_id}:${binding.rank}:${binding.suit}`)
+      .sort()
+      .join("|");
+
+    if (!byKey.has(key)) {
+      byKey.set(key, resolution);
+    }
+  }
+
+  return [...byKey.values()]
+    .sort((left, right) => (right.values.at(-1) ?? 0) - (left.values.at(-1) ?? 0))
+    .map((resolution) => resolution.jokerBindings);
+}
+
+function enumerateRunResolutions(cards: Card[], jokerCards: Card[], aceMode: "low" | "high") {
   const values = cards.map((card) => rankToSequenceValue(card.rank, aceMode)).sort((left, right) => left - right);
   const duplicates = new Set(values);
 
   if (duplicates.size !== values.length) {
-    return null;
+    return [];
   }
 
-  const missingValues: number[] = [];
-
-  for (let index = 1; index < values.length; index += 1) {
-    const previousValue = values[index - 1];
-    const currentValue = values[index];
-
-    for (let value = previousValue + 1; value < currentValue; value += 1) {
-      missingValues.push(value);
-    }
-  }
-
-  if (missingValues.length > jokerCards.length) {
-    return null;
-  }
-
-  const limitHigh = aceMode === "high" ? 14 : 13;
-  const limitLow = aceMode === "low" ? 1 : 2;
-  let nextHigh = values[values.length - 1] + 1;
-  let nextLow = values[0] - 1;
-  let remainingJokers = jokerCards.length - missingValues.length;
-  const extensionValues: number[] = [];
-
-  while (remainingJokers > 0 && nextHigh <= limitHigh) {
-    extensionValues.push(nextHigh);
-    nextHigh += 1;
-    remainingJokers -= 1;
-  }
-
-  while (remainingJokers > 0 && nextLow >= limitLow) {
-    extensionValues.push(nextLow);
-    nextLow -= 1;
-    remainingJokers -= 1;
-  }
-
-  if (remainingJokers > 0) {
-    return null;
-  }
-
-  const representedValues = [...missingValues, ...extensionValues].sort((left, right) => left - right);
-  const suit = cards[0].suit;
+  const suit = cards[0]?.suit;
 
   if (!suit) {
-    return null;
+    return [];
   }
 
-  return {
-    values: [...values, ...representedValues].sort((left, right) => left - right),
-    jokerBindings: jokerCards.map((jokerCard, index) => ({
-      joker_id: jokerCard.id,
-      rank: sequenceValueToRank(representedValues[index], aceMode),
-      suit
-    }))
-  };
+  const totalLength = cards.length + jokerCards.length;
+  const limitHigh = aceMode === "high" ? 14 : 13;
+  const limitLow = aceMode === "low" ? 1 : 2;
+  const minimumStart = Math.max(limitLow, values[values.length - 1] - totalLength + 1);
+  const maximumStart = Math.min(values[0], limitHigh - totalLength + 1);
+  const resolutions: { values: number[]; jokerBindings: JokerBinding[] }[] = [];
+
+  for (let start = minimumStart; start <= maximumStart; start += 1) {
+    const sequence = Array.from({ length: totalLength }, (_, index) => start + index);
+    const includesNaturals = values.every((value) => sequence.includes(value));
+
+    if (!includesNaturals) {
+      continue;
+    }
+
+    const representedValues = sequence.filter((value) => !values.includes(value));
+
+    if (representedValues.length !== jokerCards.length) {
+      continue;
+    }
+
+    resolutions.push({
+      values: sequence,
+      jokerBindings: jokerCards.map((jokerCard, index) => ({
+        joker_id: jokerCard.id,
+        rank: sequenceValueToRank(representedValues[index], aceMode),
+        suit
+      }))
+    });
+  }
+
+  return resolutions;
+}
+
+function permuteSuits(suits: readonly Suit[], length: number, prefix: Suit[] = []): Suit[][] {
+  if (prefix.length === length) {
+    return [prefix];
+  }
+
+  const combinations: Suit[][] = [];
+
+  for (const suit of suits) {
+    if (prefix.includes(suit)) {
+      continue;
+    }
+
+    combinations.push(...permuteSuits(suits, length, [...prefix, suit]));
+  }
+
+  return combinations;
 }
 
 function sequenceValueToRank(value: number, aceMode: "low" | "high"): Exclude<Rank, "JOKER"> {
