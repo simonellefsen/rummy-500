@@ -32,6 +32,7 @@ export interface GameVariants {
   aceCanBeHigh: boolean;
   minimumInitialMeldPoints: number;
   mustDiscardToGoOut: boolean;
+  visibleDiscardPile: boolean;
 }
 
 export interface GameConfig {

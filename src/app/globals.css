@@ -732,6 +732,24 @@ a {
   gap: 0.9rem;
 }
 
+.mobile-discard-stack {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.35rem;
+  max-width: 180px;
+}
+
+.mobile-discard-card {
+  display: grid;
+  justify-items: center;
+  gap: 0.2rem;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  padding: 0;
+}
+
 .mobile-pile-button {
   display: grid;
   justify-items: center;
@@ -927,13 +945,22 @@ a {
   opacity: 0.65;
 }
 
+.pile-discard-spread {
+  width: min(360px, 100%);
+  min-height: 240px;
+  align-content: start;
+  padding: 0.9rem;
+}
+
 .table-pile .cardmeister-shell,
 .table-pile .pile-stack,
 .table-pile .pile-stack-back,
 .hand-playing-card .cardmeister-shell,
 .mobile-hand-card-button .cardmeister-shell,
 .mobile-pile-button .cardmeister-shell,
-.mobile-pile-button .pile-stack {
+.mobile-pile-button .pile-stack,
+.mobile-discard-card .cardmeister-shell,
+.discard-card-button .cardmeister-shell {
   pointer-events: none;
 }
 
@@ -947,6 +974,29 @@ a {
 .pile-hint {
   color: var(--muted);
   font-size: 0.86rem;
+}
+
+.discard-spread {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.45rem;
+}
+
+.discard-card-button {
+  display: grid;
+  justify-items: center;
+  gap: 0.3rem;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  padding: 0;
+}
+
+.discard-card-button small,
+.mobile-discard-card span {
+  color: var(--muted);
+  font-size: 0.72rem;
 }
 
 .pile-stack,

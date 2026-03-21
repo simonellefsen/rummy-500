@@ -124,6 +124,7 @@ export function HomeConsole() {
   const [joinCode, setJoinCode] = useState("");
   const [maxPlayers, setMaxPlayers] = useState(4);
   const [mustDiscardToGoOut, setMustDiscardToGoOut] = useState(true);
+  const [visibleDiscardPile, setVisibleDiscardPile] = useState(false);
   const [games, setGames] = useState<DashboardGame[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
@@ -351,7 +352,8 @@ export function HomeConsole() {
           aceCanBeLow: true,
           aceCanBeHigh: true,
           minimumInitialMeldPoints: 0,
-          mustDiscardToGoOut
+          mustDiscardToGoOut,
+          visibleDiscardPile
         }
       }
     });
@@ -543,6 +545,18 @@ export function HomeConsole() {
                   type="checkbox"
                 />
                 <span>Require a final discard to go out</span>
+              </div>
+            </label>
+
+            <label className="field">
+              <span>Discard pile rule</span>
+              <div className="toggle-row">
+                <input
+                  checked={visibleDiscardPile}
+                  onChange={(event) => setVisibleDiscardPile(event.target.checked)}
+                  type="checkbox"
+                />
+                <span>Show the full discard pile and allow picking from anywhere</span>
               </div>
             </label>
 

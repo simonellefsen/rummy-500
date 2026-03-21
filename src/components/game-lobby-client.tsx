@@ -616,7 +616,7 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
     await refreshLobby();
   }
 
-  async function playTurnAction(action: "draw_stock" | "draw_discard_top" | "discard_card", cardId?: string) {
+  async function playTurnAction(action: "draw_stock" | "draw_discard_top" | "draw_discard_stack" | "discard_card", cardId?: string) {
     setErrorMessage(null);
     setStatusMessage(null);
 
@@ -635,6 +635,8 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
       setStatusMessage("Drew from the stock pile.");
     } else if (action === "draw_discard_top") {
       setStatusMessage("Picked up the top discard.");
+    } else if (action === "draw_discard_stack") {
+      setStatusMessage("Picked up cards from the discard pile.");
     } else {
       setStatusMessage("Discarded card and passed the turn.");
     }
@@ -821,6 +823,9 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
   const suggestedLayoffs = selectedCard ? findSuggestedLayoffs(round?.table_melds ?? [], selectedCard) : [];
   const tableSets = (round?.table_melds ?? []).filter((meld) => meld.type === "set");
   const tableRuns = (round?.table_melds ?? []).filter((meld) => meld.type === "run");
+  const visibleDiscardPile = game?.config?.variants && typeof game.config.variants === "object"
+    ? Boolean((game.config.variants as Record<string, unknown>).visibleDiscardPile)
+    : false;
   const canStart =
     !!currentUser &&
     !!game &&
@@ -836,7 +841,9 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
   const mobilePrompt = statusMessage
     ? statusMessage
     : canDraw
-      ? "It's your turn. Start by drawing a card from the stock or the discard pile."
+      ? visibleDiscardPile
+        ? "It's your turn. Draw from the stock or tap any discard card to take it and every card above it."
+        : "It's your turn. Start by drawing a card from the stock or the discard pile."
       : canMeld
         ? selectedCard && suggestedMelds.length + suggestedLayoffs.length > 0
           ? suggestedLayoffs.length > 0
@@ -846,7 +853,9 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
         : `${activeTurnLabel} is up next.`;
   const desktopPrompt =
     canDraw
-      ? "Your turn: draw from the stock or take the top discard."
+      ? visibleDiscardPile
+        ? "Your turn: draw from stock or choose any discard card to take that card plus all newer discards."
+        : "Your turn: draw from the stock or take the top discard."
       : canMeld
         ? selectedCard && suggestedMelds.length + suggestedLayoffs.length > 0
           ? suggestedLayoffs.length > 0
@@ -1118,21 +1127,47 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
                           <strong>{round.stock_count}</strong>
                         </button>
 
-                        <button
-                          className="table-pile pile-discard"
-                          disabled={!canDraw || isPending || discardCount === 0}
-                          onClick={() => startTransition(() => void playTurnAction("draw_discard_top"))}
-                          type="button"
-                        >
-                          <span className="pile-label">Discard</span>
-                          {discardTop ? (
-                            <PlayingCardFace card={discardTop} size="mini" />
-                          ) : (
-                            <div className="pile-stack">Empty</div>
-                          )}
-                          <span className="pile-hint">Take top card</span>
-                          <strong>{discardCount}</strong>
-                        </button>
+                        {visibleDiscardPile ? (
+                          <div className="table-pile pile-discard pile-discard-spread">
+                            <span className="pile-label">Discard</span>
+                            <div className="discard-spread" role="list">
+                              {round.discard_pile.length > 0 ? (
+                                round.discard_pile.map((card, index) => (
+                                  <button
+                                    className="discard-card-button"
+                                    disabled={!canDraw || isPending}
+                                    key={card.id}
+                                    onClick={() => startTransition(() => void playTurnAction("draw_discard_stack", card.id))}
+                                    type="button"
+                                  >
+                                    <PlayingCardFace card={card} size="tiny" />
+                                    <small>{index === discardCount - 1 ? "Top" : `Take ${discardCount - index}`}</small>
+                                  </button>
+                                ))
+                              ) : (
+                                <div className="pile-stack">Empty</div>
+                              )}
+                            </div>
+                            <span className="pile-hint">Pick any card and take it plus everything above it</span>
+                            <strong>{discardCount}</strong>
+                          </div>
+                        ) : (
+                          <button
+                            className="table-pile pile-discard"
+                            disabled={!canDraw || isPending || discardCount === 0}
+                            onClick={() => startTransition(() => void playTurnAction("draw_discard_top"))}
+                            type="button"
+                          >
+                            <span className="pile-label">Discard</span>
+                            {discardTop ? (
+                              <PlayingCardFace card={discardTop} size="mini" />
+                            ) : (
+                              <div className="pile-stack">Empty</div>
+                            )}
+                            <span className="pile-hint">Take top card</span>
+                            <strong>{discardCount}</strong>
+                          </button>
+                        )}
                       </div>
 
                       <p className="table-turn-prompt">{desktopPrompt}</p>
@@ -1422,15 +1457,36 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
                     <span>Stock</span>
                   </button>
 
-                  <button
-                    className="mobile-pile-button"
-                    disabled={!canDraw || isPending || discardCount === 0}
-                    onClick={() => startTransition(() => void playTurnAction("draw_discard_top"))}
-                    type="button"
-                  >
-                    {discardTop ? <PlayingCardFace card={discardTop} size="mini" /> : <div className="pile-stack">Empty</div>}
-                    <span>Discard</span>
-                  </button>
+                  {visibleDiscardPile ? (
+                    <div className="mobile-discard-stack">
+                      {round?.discard_pile?.length ? (
+                        round.discard_pile.map((card, index) => (
+                          <button
+                            className="mobile-discard-card"
+                            disabled={!canDraw || isPending}
+                            key={card.id}
+                            onClick={() => startTransition(() => void playTurnAction("draw_discard_stack", card.id))}
+                            type="button"
+                          >
+                            <PlayingCardFace card={card} size="tiny" />
+                            <span>{index === discardCount - 1 ? "Top" : `${discardCount - index}`}</span>
+                          </button>
+                        ))
+                      ) : (
+                        <div className="pile-stack">Empty</div>
+                      )}
+                    </div>
+                  ) : (
+                    <button
+                      className="mobile-pile-button"
+                      disabled={!canDraw || isPending || discardCount === 0}
+                      onClick={() => startTransition(() => void playTurnAction("draw_discard_top"))}
+                      type="button"
+                    >
+                      {discardTop ? <PlayingCardFace card={discardTop} size="mini" /> : <div className="pile-stack">Empty</div>}
+                      <span>Discard</span>
+                    </button>
+                  )}
                 </div>
               </div>
 

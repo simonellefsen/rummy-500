@@ -153,6 +153,8 @@ Deno.serve(async (request) => {
         minimumInitialMeldPoints: 0,
         mustDiscardToGoOut:
           typeof existingVariants.mustDiscardToGoOut === "boolean" ? existingVariants.mustDiscardToGoOut : true,
+        visibleDiscardPile:
+          typeof existingVariants.visibleDiscardPile === "boolean" ? existingVariants.visibleDiscardPile : false,
         ...existingVariants
       }
     };

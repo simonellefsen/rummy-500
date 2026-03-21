@@ -13,7 +13,8 @@ export function createGameConfig(playerCount = 4): GameConfig {
       aceCanBeLow: true,
       aceCanBeHigh: true,
       minimumInitialMeldPoints: 0,
-      mustDiscardToGoOut: true
+      mustDiscardToGoOut: true,
+      visibleDiscardPile: false
     }
   };
 }
