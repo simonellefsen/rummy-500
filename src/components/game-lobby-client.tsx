@@ -789,6 +789,7 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
     game.status === "lobby" &&
     game.host_user_id === currentUser.id &&
     players.length >= 2;
+  const showReadyOverlay = !!currentPlayer && game?.status === "lobby" && !currentPlayer.ready;
   const discardTop = round?.discard_pile?.at(-1) ?? null;
   const discardCount = round?.discard_pile?.length ?? 0;
   const mobileTopPlayer = otherPlayers[0] ?? null;
@@ -841,6 +842,56 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
         </section>
       ) : (
         <>
+          {showReadyOverlay ? (
+            <div className="ready-overlay" role="presentation">
+              <section
+                aria-labelledby="ready-overlay-title"
+                aria-modal="true"
+                className="ready-overlay-card"
+                role="dialog"
+              >
+                <p className="eyebrow">You joined the lobby</p>
+                <h2 id="ready-overlay-title">
+                  {game?.invite_code ? `Lobby ${game.invite_code}` : "Ready to play?"}
+                </h2>
+                <p className="ready-overlay-copy">
+                  Mark yourself ready so the host can see you are present. The host can still start the
+                  hand once at least two players are seated.
+                </p>
+                <div className="ready-overlay-meta">
+                  <span>{players.length} seated</span>
+                  <span>Host: {game ? userLabel(game.host_user_id, profiles, currentUser) : "Unknown"}</span>
+                </div>
+                <div className="ready-overlay-actions">
+                  <button
+                    className="button button-google"
+                    onClick={() => startTransition(() => void updateReady(true))}
+                    type="button"
+                  >
+                    Mark ready
+                  </button>
+                  <button
+                    className="button button-ghost"
+                    onClick={() => startTransition(() => void copyCode())}
+                    type="button"
+                  >
+                    Copy code
+                  </button>
+                  {game?.host_user_id === currentUser.id ? (
+                    <button
+                      className="button button-secondary"
+                      disabled={!canStart || isPending}
+                      onClick={() => startTransition(() => void startGame())}
+                      type="button"
+                    >
+                      Start hand
+                    </button>
+                  ) : null}
+                </div>
+              </section>
+            </div>
+          ) : null}
+
           <section className="table-layout-shell desktop-only">
             <aside className="panel table-sidebar">
               <div className="section-heading">

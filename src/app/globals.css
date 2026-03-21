@@ -51,6 +51,63 @@ a {
   display: none;
 }
 
+.ready-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 26;
+  display: grid;
+  place-items: center;
+  padding: 1.25rem;
+  background: rgba(3, 10, 16, 0.46);
+  backdrop-filter: blur(6px);
+}
+
+.ready-overlay-card {
+  width: min(100%, 34rem);
+  display: grid;
+  gap: 1rem;
+  border-radius: 30px;
+  border: 1px solid rgba(243, 239, 223, 0.14);
+  background:
+    radial-gradient(circle at top, rgba(233, 191, 101, 0.15), transparent 44%),
+    rgba(7, 21, 30, 0.97);
+  box-shadow: 0 28px 70px rgba(0, 0, 0, 0.34);
+  padding: 1.35rem;
+}
+
+.ready-overlay-card h2 {
+  margin: 0;
+  font-family: var(--display-font);
+  font-size: clamp(2rem, 5vw, 3rem);
+}
+
+.ready-overlay-copy {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.ready-overlay-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.ready-overlay-meta span {
+  border-radius: 999px;
+  border: 1px solid rgba(243, 239, 223, 0.1);
+  background: rgba(243, 239, 223, 0.05);
+  color: var(--text);
+  padding: 0.45rem 0.8rem;
+  font-size: 0.92rem;
+}
+
+.ready-overlay-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.7rem;
+}
+
 .hero-panel,
 .panel,
 .hand-panel {
@@ -1254,6 +1311,22 @@ a {
 
   .mobile-table-zone {
     grid-template-columns: 72px 1fr 72px;
+  }
+
+  .ready-overlay {
+    align-items: end;
+    padding: 1rem;
+  }
+
+  .ready-overlay-card {
+    width: 100%;
+    border-radius: 26px;
+    padding: 1.1rem;
+  }
+
+  .ready-overlay-actions {
+    display: grid;
+    grid-template-columns: 1fr;
   }
 
   .mobile-back-stack .cardmeister-shell,
