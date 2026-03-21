@@ -800,6 +800,20 @@ a {
   color: var(--muted);
 }
 
+.mobile-stock-count {
+  min-width: 2.15rem;
+  padding: 0.16rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 245, 214, 0.38);
+  background: rgba(7, 15, 22, 0.86);
+  color: #fff7d1;
+  font-size: 1rem;
+  font-weight: 800;
+  line-height: 1.1;
+  text-align: center;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.28);
+}
+
 .mobile-bottom-area {
   position: sticky;
   bottom: 0;

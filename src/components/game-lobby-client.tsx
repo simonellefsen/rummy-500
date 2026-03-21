@@ -1863,6 +1863,7 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
                   >
                     <StockCardBack />
                     <span>Stock</span>
+                    <strong className="mobile-stock-count">{round?.stock_count ?? 0}</strong>
                   </button>
 
                   {visibleDiscardPile ? (
