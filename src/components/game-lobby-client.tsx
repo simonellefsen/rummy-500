@@ -1861,9 +1861,11 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
                     onClick={() => startTransition(() => void playTurnAction("draw_stock"))}
                     type="button"
                   >
-                    <StockCardBack />
+                    <div className="mobile-stock-card-wrap">
+                      <StockCardBack />
+                      <strong className="mobile-stock-count">{round?.stock_count ?? 0}</strong>
+                    </div>
                     <span>Stock</span>
-                    <strong className="mobile-stock-count">{round?.stock_count ?? 0}</strong>
                   </button>
 
                   {visibleDiscardPile ? (

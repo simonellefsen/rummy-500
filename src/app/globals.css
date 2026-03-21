@@ -795,23 +795,32 @@ a {
   color: var(--text);
 }
 
+.mobile-stock-card-wrap {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+}
+
 .mobile-pile-button span {
   font-size: 0.85rem;
   color: var(--muted);
 }
 
 .mobile-stock-count {
-  min-width: 2.15rem;
-  padding: 0.16rem 0.5rem;
+  position: absolute;
+  inset: 50% auto auto 50%;
+  transform: translate(-50%, -50%);
+  min-width: 1.7rem;
+  padding: 0.08rem 0.32rem;
   border-radius: 999px;
-  border: 1px solid rgba(255, 245, 214, 0.38);
-  background: rgba(7, 15, 22, 0.86);
+  border: 1px solid rgba(255, 245, 214, 0.46);
+  background: rgba(7, 15, 22, 0.92);
   color: #fff7d1;
-  font-size: 1rem;
+  font-size: 0.82rem;
   font-weight: 800;
   line-height: 1.1;
   text-align: center;
-  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.28);
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.34);
 }
 
 .mobile-bottom-area {
@@ -844,6 +853,32 @@ a {
   flex-wrap: wrap;
   gap: 0.6rem;
   margin-top: 0.8rem;
+}
+
+.mobile-prompt .button,
+.mobile-prompt .button-secondary,
+.mobile-prompt .button-google,
+.mobile-prompt .button-ghost {
+  border-color: rgba(26, 31, 22, 0.26);
+  background: rgba(32, 40, 25, 0.92);
+  color: #fff7da;
+  box-shadow: 0 6px 16px rgba(89, 76, 9, 0.12);
+}
+
+.mobile-prompt .button:hover:not(:disabled),
+.mobile-prompt .button-secondary:hover:not(:disabled),
+.mobile-prompt .button-google:hover:not(:disabled),
+.mobile-prompt .button-ghost:hover:not(:disabled) {
+  border-color: rgba(26, 31, 22, 0.42);
+  background: rgba(23, 30, 19, 0.96);
+}
+
+.mobile-prompt .button:disabled,
+.mobile-prompt .button-secondary:disabled,
+.mobile-prompt .button-google:disabled,
+.mobile-prompt .button-ghost:disabled {
+  opacity: 0.72;
+  color: rgba(255, 247, 218, 0.82);
 }
 
 .mobile-hand-scroll {
