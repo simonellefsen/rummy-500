@@ -27,12 +27,19 @@ export interface Card {
   isJoker: boolean;
 }
 
+export interface JokerBinding {
+  joker_id: string;
+  rank: Exclude<Rank, "JOKER">;
+  suit: Suit;
+}
+
 export interface GameVariants {
   aceCanBeLow: boolean;
   aceCanBeHigh: boolean;
   minimumInitialMeldPoints: number;
   mustDiscardToGoOut: boolean;
   visibleDiscardPile: boolean;
+  allowJokerRetrieval: boolean;
 }
 
 export interface GameConfig {
@@ -55,6 +62,7 @@ export interface MeldAnalysis {
   isValid: boolean;
   points: number;
   reason?: string;
+  jokerBindings?: JokerBinding[];
 }
 
 export interface TableMeld {
@@ -63,6 +71,7 @@ export interface TableMeld {
   cards?: Card[];
   points?: number;
   created_at?: string;
+  joker_bindings?: JokerBinding[];
 }
 
 export interface HandScoreInput {

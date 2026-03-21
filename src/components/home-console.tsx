@@ -125,6 +125,7 @@ export function HomeConsole() {
   const [maxPlayers, setMaxPlayers] = useState(4);
   const [mustDiscardToGoOut, setMustDiscardToGoOut] = useState(true);
   const [visibleDiscardPile, setVisibleDiscardPile] = useState(false);
+  const [allowJokerRetrieval, setAllowJokerRetrieval] = useState(false);
   const [games, setGames] = useState<DashboardGame[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
@@ -354,7 +355,8 @@ export function HomeConsole() {
           aceCanBeHigh: true,
           minimumInitialMeldPoints: 0,
           mustDiscardToGoOut,
-          visibleDiscardPile
+          visibleDiscardPile,
+          allowJokerRetrieval
         }
       }
     });
@@ -558,6 +560,18 @@ export function HomeConsole() {
                   type="checkbox"
                 />
                 <span>Show the full discard pile and allow picking from anywhere</span>
+              </div>
+            </label>
+
+            <label className="field">
+              <span>Joker rule</span>
+              <div className="toggle-row">
+                <input
+                  checked={allowJokerRetrieval}
+                  onChange={(event) => setAllowJokerRetrieval(event.target.checked)}
+                  type="checkbox"
+                />
+                <span>Allow players to replace a joker in a meld with the exact card it represents</span>
               </div>
             </label>
 

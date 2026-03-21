@@ -157,6 +157,8 @@ Deno.serve(async (request) => {
           typeof existingVariants.mustDiscardToGoOut === "boolean" ? existingVariants.mustDiscardToGoOut : true,
         visibleDiscardPile:
           typeof existingVariants.visibleDiscardPile === "boolean" ? existingVariants.visibleDiscardPile : false,
+        allowJokerRetrieval:
+          typeof existingVariants.allowJokerRetrieval === "boolean" ? existingVariants.allowJokerRetrieval : false,
         ...existingVariants
       }
     };

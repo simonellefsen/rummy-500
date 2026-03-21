@@ -1,16 +1,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 import { corsHeaders } from "../_shared/cors.ts";
-import { analyzeMeld, type Card, type JokerBinding } from "../_shared/rummy.ts";
-
-type TableMeld = {
-  owner_user_id: string;
-  type: "set" | "run";
-  cards: Card[];
-  points: number;
-  created_at: string;
-  joker_bindings?: JokerBinding[];
-};
+import { scoreCard, type Card, type TableMeld } from "../_shared/rummy.ts";
 
 Deno.serve(async (request) => {
   if (request.method === "OPTIONS") {
@@ -37,14 +28,27 @@ Deno.serve(async (request) => {
       return Response.json({ error: "Invalid authorization header." }, { status: 401, headers: corsHeaders });
     }
 
-    const body = (await request.json()) as { gameId?: string; cardIds?: string[] };
+    const body = (await request.json()) as {
+      gameId?: string;
+      meldIndex?: number;
+      jokerId?: string;
+      replacementCardId?: string;
+    };
 
     if (!body.gameId) {
       return Response.json({ error: "gameId is required." }, { status: 400, headers: corsHeaders });
     }
 
-    if (!Array.isArray(body.cardIds) || body.cardIds.length < 3) {
-      return Response.json({ error: "cardIds must contain at least three cards." }, { status: 400, headers: corsHeaders });
+    if (!Number.isInteger(body.meldIndex) || body.meldIndex < 0) {
+      return Response.json({ error: "meldIndex must be a non-negative integer." }, { status: 400, headers: corsHeaders });
+    }
+
+    if (!body.jokerId?.trim()) {
+      return Response.json({ error: "jokerId is required." }, { status: 400, headers: corsHeaders });
+    }
+
+    if (!body.replacementCardId?.trim()) {
+      return Response.json({ error: "replacementCardId is required." }, { status: 400, headers: corsHeaders });
     }
 
     const supabase = createClient(supabaseUrl, serviceRoleKey);
@@ -77,7 +81,11 @@ Deno.serve(async (request) => {
     }
 
     if (game.turn_stage !== "awaiting_discard") {
-      return Response.json({ error: "You must draw before placing a meld." }, { status: 409, headers: corsHeaders });
+      return Response.json({ error: "You must draw before replacing a joker." }, { status: 409, headers: corsHeaders });
+    }
+
+    if (game.config?.variants?.allowJokerRetrieval !== true) {
+      return Response.json({ error: "Joker retrieval is disabled for this table." }, { status: 409, headers: corsHeaders });
     }
 
     const { data: round, error: roundError } = await supabase
@@ -96,6 +104,19 @@ Deno.serve(async (request) => {
       return Response.json({ error: "Round is not active." }, { status: 409, headers: corsHeaders });
     }
 
+    const tableMelds = ((round.table_melds ?? []) as TableMeld[]) || [];
+    const targetMeld = tableMelds[body.meldIndex];
+
+    if (!targetMeld) {
+      return Response.json({ error: "Target meld not found." }, { status: 404, headers: corsHeaders });
+    }
+
+    const jokerBinding = (targetMeld.joker_bindings ?? []).find((binding) => binding.joker_id === body.jokerId);
+
+    if (!jokerBinding) {
+      return Response.json({ error: "That joker is not fixed in the selected meld." }, { status: 404, headers: corsHeaders });
+    }
+
     const { data: handRow, error: handError } = await supabase
       .schema("rummy500")
       .from("player_hands")
@@ -108,61 +129,51 @@ Deno.serve(async (request) => {
       return Response.json({ error: "Current player hand not found." }, { status: 404, headers: corsHeaders });
     }
 
-    const cards = (handRow.cards ?? []) as Card[];
-    const selectedIds = [...new Set(body.cardIds)];
-    const selectedCards = cards.filter((card) => selectedIds.includes(card.id));
-    const requiredPickupCardId =
-      typeof game.required_pickup_card_id === "string" && game.required_pickup_card_id.trim()
-        ? game.required_pickup_card_id.trim()
-        : null;
+    const hand = (handRow.cards ?? []) as Card[];
+    const replacementCard = hand.find((card) => card.id === body.replacementCardId);
 
-    if (selectedCards.length !== selectedIds.length) {
-      return Response.json({ error: "One or more selected cards are not in the current hand." }, { status: 400, headers: corsHeaders });
+    if (!replacementCard) {
+      return Response.json({ error: "Replacement card is not in your hand." }, { status: 400, headers: corsHeaders });
     }
 
-    if (requiredPickupCardId && !selectedIds.includes(requiredPickupCardId)) {
+    if (
+      replacementCard.isJoker ||
+      replacementCard.rank !== jokerBinding.rank ||
+      replacementCard.suit !== jokerBinding.suit
+    ) {
       return Response.json(
-        { error: "You must use the picked discard in a meld or layoff before making any other play." },
+        { error: "Replacement card must be the exact rank and suit represented by the joker." },
         { status: 409, headers: corsHeaders }
       );
     }
 
-    const meld = analyzeMeld(selectedCards);
+    const jokerCard = (targetMeld.cards ?? []).find((card) => card.id === body.jokerId);
 
-    if (!meld.isValid || meld.kind === "invalid") {
-      return Response.json({ error: meld.reason ?? "Invalid meld." }, { status: 400, headers: corsHeaders });
+    if (!jokerCard || !jokerCard.isJoker) {
+      return Response.json({ error: "Target joker card was not found in the meld." }, { status: 404, headers: corsHeaders });
     }
 
-    const nextHand = cards.filter((card) => !selectedIds.includes(card.id));
-    const mustDiscardToGoOut =
-      typeof game.config?.variants?.mustDiscardToGoOut === "boolean" ? game.config.variants.mustDiscardToGoOut : true;
+    const nextHand = hand
+      .filter((card) => card.id !== body.replacementCardId)
+      .concat([jokerCard]);
 
-    if (nextHand.length === 0 && mustDiscardToGoOut) {
-      return Response.json(
-        { error: "This table requires a final discard to go out. Keep one card to discard." },
-        { status: 409, headers: corsHeaders }
-      );
-    }
+    const nextTableMelds = [...tableMelds];
+    nextTableMelds[body.meldIndex] = {
+      ...targetMeld,
+      cards: (targetMeld.cards ?? []).map((card) => (card.id === body.jokerId ? replacementCard : card)),
+      joker_bindings: (targetMeld.joker_bindings ?? []).filter((binding) => binding.joker_id !== body.jokerId)
+    };
 
-    const nextTableMelds = [
-      ...(((round.table_melds ?? []) as TableMeld[]) || []),
-      {
-        owner_user_id: user.id,
-        type: meld.kind,
-        cards: selectedCards,
-        points: meld.points,
-        created_at: new Date().toISOString(),
-        joker_bindings: meld.jokerBindings ?? []
-      }
-    ];
+    const actionAt = new Date().toISOString();
     const nextActionLog = [
-      ...(((round.action_log ?? []) as Record<string, unknown>[]) || []),
+      ...((((round.action_log ?? []) as Record<string, unknown>[]) || [])),
       {
-        type: "play_meld",
+        type: "replace_joker",
         actor_user_id: user.id,
-        meld_type: meld.kind,
-        cards: selectedCards,
-        at: new Date().toISOString()
+        meld_index: body.meldIndex,
+        joker_id: body.jokerId,
+        replacement_card: replacementCard,
+        at: actionAt
       }
     ];
 
@@ -193,7 +204,8 @@ Deno.serve(async (request) => {
       .schema("rummy500")
       .from("game_players")
       .update({
-        current_hand_score: (typeof playerRow?.current_hand_score === "number" ? playerRow.current_hand_score : 0) + meld.points
+        current_hand_score:
+          (typeof playerRow?.current_hand_score === "number" ? playerRow.current_hand_score : 0) + scoreCard(replacementCard)
       })
       .eq("game_id", body.gameId)
       .eq("user_id", user.id);
@@ -215,7 +227,7 @@ Deno.serve(async (request) => {
       throw updateRoundError;
     }
 
-    if (requiredPickupCardId) {
+    if (game.required_pickup_card_id && game.required_pickup_card_id === replacementCard.id) {
       const { error: updateGameError } = await supabase
         .schema("rummy500")
         .from("games")
@@ -231,11 +243,11 @@ Deno.serve(async (request) => {
       game_id: body.gameId,
       round_id: round.id,
       actor_user_id: user.id,
-      action_type: "play_meld",
+      action_type: "replace_joker",
       payload: {
-        type: meld.kind,
-        points: meld.points,
-        cards: selectedCards
+        meld_index: body.meldIndex,
+        joker_id: body.jokerId,
+        replacement_card: replacementCard
       }
     });
 
@@ -243,35 +255,12 @@ Deno.serve(async (request) => {
       throw actionError;
     }
 
-    if (nextHand.length === 0 && !mustDiscardToGoOut) {
-      const { data: finishData, error: finishError } = await supabase.schema("rummy500").rpc("finish_hand", {
-        p_game_id: body.gameId,
-        p_round_id: round.id,
-        p_winner_user_id: user.id,
-        p_finish_reason: "meld_go_out"
-      });
-
-      if (finishError) {
-        throw finishError;
-      }
-
-      return Response.json(
-        {
-          meldType: meld.kind,
-          points: meld.points,
-          remainingHandCount: nextHand.length,
-          handFinished: true,
-          result: finishData
-        },
-        { headers: corsHeaders }
-      );
-    }
-
     return Response.json(
       {
-        meldType: meld.kind,
-        points: meld.points,
-        remainingHandCount: nextHand.length
+        meldIndex: body.meldIndex,
+        jokerId: body.jokerId,
+        replacementCard,
+        jokerCard
       },
       { headers: corsHeaders }
     );

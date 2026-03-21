@@ -1104,7 +1104,28 @@ a {
 
 .meld-preview {
   display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
   gap: 0.4rem;
+}
+
+.meld-card-stack {
+  display: grid;
+  justify-items: center;
+  gap: 0.18rem;
+}
+
+.meld-owner-label {
+  width: 100%;
+  color: var(--gold);
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.joker-binding-note {
+  color: var(--muted);
+  font-size: 0.68rem;
 }
 
 .table-footer {

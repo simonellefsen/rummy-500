@@ -14,7 +14,8 @@ export function createGameConfig(playerCount = 4): GameConfig {
       aceCanBeHigh: true,
       minimumInitialMeldPoints: 0,
       mustDiscardToGoOut: true,
-      visibleDiscardPile: false
+      visibleDiscardPile: false,
+      allowJokerRetrieval: false
     }
   };
 }

@@ -6,8 +6,8 @@ import { useEffect, useState, useTransition } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 
 import { cardLabel } from "../lib/rummy/cards";
-import { findDiscardPickupUses, findSuggestedLayoffs, findSuggestedMelds } from "../lib/rummy/meld-options";
-import type { Card, TableMeld } from "../lib/rummy/types";
+import { findDiscardPickupUses, findSuggestedJokerRetrievals, findSuggestedLayoffs, findSuggestedMelds } from "../lib/rummy/meld-options";
+import type { Card, JokerBinding, TableMeld } from "../lib/rummy/types";
 import { createBrowserSupabaseClient } from "../lib/supabase/client";
 import { getPublicSupabaseEnv } from "../lib/supabase/env";
 
@@ -246,6 +246,18 @@ function StockCardBack() {
       ></playing-card>
     </div>
   );
+}
+
+function getJokerBinding(meld: TableMeld, card: Card) {
+  if (!card.isJoker) {
+    return null;
+  }
+
+  return (meld.joker_bindings ?? []).find((binding) => binding.joker_id === card.id) ?? null;
+}
+
+function JokerBindingNote({ binding }: { binding: JokerBinding }) {
+  return <small className="joker-binding-note">{`${binding.rank}${binding.suit[0].toUpperCase()}`}</small>;
 }
 
 function sortHandCards(hand: Card[], mode: "natural" | "rank" | "suit") {
@@ -780,6 +792,46 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
     await refreshLobby();
   }
 
+  async function replaceJoker(meldIndex: number, jokerId: string, replacementCardId: string) {
+    setErrorMessage(null);
+    setStatusMessage(null);
+
+    const {
+      data: { session: currentSession },
+      error: sessionError
+    } = await supabase.auth.getSession();
+
+    if (sessionError) {
+      setErrorMessage(sessionError.message);
+      return;
+    }
+
+    if (!currentSession?.access_token) {
+      setErrorMessage("No Supabase session token is available in the browser.");
+      return;
+    }
+
+    const response = await postEdgeFunction(
+      "replace-joker",
+      { gameId, meldIndex, jokerId, replacementCardId },
+      currentSession.access_token
+    );
+
+    if (!response.ok) {
+      const message =
+        typeof response.body === "object" && response.body && "error" in response.body
+          ? String(response.body.error)
+          : response.rawBody || `replace-joker failed with status ${response.status}`;
+
+      setErrorMessage(message);
+      return;
+    }
+
+    setSelectedCardId(null);
+    setStatusMessage("Joker replaced and returned to your hand.");
+    await refreshLobby();
+  }
+
   async function runStartGameDiagnostics() {
     setErrorMessage(null);
     setStatusMessage(null);
@@ -881,6 +933,12 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
   const sortedHand = sortHandCards(hand, handSortMode);
   const suggestedMelds = selectedCard ? findSuggestedMelds(hand, selectedCard.id) : [];
   const suggestedLayoffs = selectedCard ? findSuggestedLayoffs(round?.table_melds ?? [], selectedCard) : [];
+  const allowJokerRetrieval = game?.config?.variants && typeof game.config.variants === "object"
+    ? Boolean((game.config.variants as Record<string, unknown>).allowJokerRetrieval)
+    : false;
+  const suggestedJokerRetrievals = selectedCard
+    ? findSuggestedJokerRetrievals(round?.table_melds ?? [], selectedCard, allowJokerRetrieval)
+    : [];
   const tableSets = (round?.table_melds ?? []).filter((meld) => meld.type === "set");
   const tableRuns = (round?.table_melds ?? []).filter((meld) => meld.type === "run");
   const gameConfig = (game?.config ?? {}) as Record<string, unknown>;
@@ -924,9 +982,11 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
         ? "It's your turn. Draw from the stock or tap any discard card to take it and every card above it."
         : "It's your turn. Start by drawing a card from the stock or the discard pile."
       : canMeld
-        ? selectedCard && suggestedMelds.length + suggestedLayoffs.length > 0
+        ? selectedCard && suggestedMelds.length + suggestedLayoffs.length + suggestedJokerRetrievals.length > 0
           ? suggestedLayoffs.length > 0
             ? "Selected card can be laid off on the table or used in a new meld."
+            : suggestedJokerRetrievals.length > 0
+              ? "Selected card can replace a joker on the table or be used in a new meld."
             : "Selected card can form a meld. Play it or discard another card."
           : "It's your turn. Select a card to see meld options, or pick a card to discard."
         : `${activeTurnLabel} is up next.`;
@@ -942,14 +1002,17 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
         ? "Your turn: draw from stock or choose any discard card to take that card plus all newer discards."
         : "Your turn: draw from the stock or take the top discard."
       : canMeld
-        ? selectedCard && suggestedMelds.length + suggestedLayoffs.length > 0
+        ? selectedCard && suggestedMelds.length + suggestedLayoffs.length + suggestedJokerRetrievals.length > 0
           ? suggestedLayoffs.length > 0
             ? "Selected card can be laid off on an existing meld or used in a new meld."
+            : suggestedJokerRetrievals.length > 0
+              ? "Selected card can replace a joker on the table or be used in a new meld."
             : "Selected card can be melded. Play it or discard to end your turn."
           : "Your turn: select a card in your hand, then meld or discard."
         : `${activeTurnLabel} is up next.`;
   const primarySuggestedMeld = suggestedMelds[0] ?? null;
   const primarySuggestedLayoff = suggestedLayoffs[0] ?? null;
+  const primaryJokerRetrieval = suggestedJokerRetrievals[0] ?? null;
   const winnerLabel = game?.winner_user_id ? userLabel(game.winner_user_id, profiles, currentUser) : null;
 
   return (
@@ -1122,7 +1185,7 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
                         <p className="muted-copy">Selecting a card reveals possible plays for sets, runs, or discard.</p>
                   ) : (
                     <>
-                      {suggestedMelds.length > 0 || suggestedLayoffs.length > 0 ? (
+                      {suggestedMelds.length > 0 || suggestedLayoffs.length > 0 || suggestedJokerRetrievals.length > 0 ? (
                         <div className="suggestion-list">
                           {suggestedMelds.map((suggestion) => (
                             <div className="suggestion-card" key={`${selectedCard.id}-${suggestion.kind}`}>
@@ -1150,6 +1213,25 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
                                   type="button"
                                 >
                                   Lay off card
+                                </button>
+                              ) : null}
+                            </div>
+                          ))}
+                          {suggestedJokerRetrievals.map((suggestion) => (
+                            <div className="suggestion-card" key={`${selectedCard.id}-replace-${suggestion.meldIndex}-${suggestion.jokerId}`}>
+                              <strong>{suggestion.kind === "set" ? "Replace joker in set" : "Replace joker in run"}</strong>
+                              <p>{`Swap in ${cardLabel(suggestion.replacementCard)} for ${suggestion.representedCard.rank} of ${suggestion.representedCard.suit}.`}</p>
+                              {canMeld ? (
+                                <button
+                                  className="button button-secondary"
+                                  onClick={() =>
+                                    startTransition(() =>
+                                      void replaceJoker(suggestion.meldIndex, suggestion.jokerId, suggestion.replacementCard.id)
+                                    )
+                                  }
+                                  type="button"
+                                >
+                                  Replace joker
                                 </button>
                               ) : null}
                             </div>
@@ -1286,9 +1368,19 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
                             <div className="meld-preview-row">
                               {tableSets.map((meld, index) => (
                                 <div className="meld-preview" key={`${meld.type ?? "meld"}-${index}`}>
-                                  {(meld.cards ?? []).map((card) => (
-                                    <PlayingCardFace card={card} key={card.id} size="tiny" />
-                                  ))}
+                                  <span className="meld-owner-label">
+                                    {meld.owner_user_id ? userLabel(meld.owner_user_id, profiles, currentUser) : "Table"}
+                                  </span>
+                                  {(meld.cards ?? []).map((card) => {
+                                    const binding = getJokerBinding(meld, card);
+
+                                    return (
+                                      <div className="meld-card-stack" key={card.id}>
+                                        <PlayingCardFace card={card} size="tiny" />
+                                        {binding ? <JokerBindingNote binding={binding} /> : null}
+                                      </div>
+                                    );
+                                  })}
                                 </div>
                               ))}
                             </div>
@@ -1302,9 +1394,19 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
                             <div className="meld-preview-row">
                               {tableRuns.map((meld, index) => (
                                 <div className="meld-preview" key={`${meld.type ?? "meld"}-${index}`}>
-                                  {(meld.cards ?? []).map((card) => (
-                                    <PlayingCardFace card={card} key={card.id} size="tiny" />
-                                  ))}
+                                  <span className="meld-owner-label">
+                                    {meld.owner_user_id ? userLabel(meld.owner_user_id, profiles, currentUser) : "Table"}
+                                  </span>
+                                  {(meld.cards ?? []).map((card) => {
+                                    const binding = getJokerBinding(meld, card);
+
+                                    return (
+                                      <div className="meld-card-stack" key={card.id}>
+                                        <PlayingCardFace card={card} size="tiny" />
+                                        {binding ? <JokerBindingNote binding={binding} /> : null}
+                                      </div>
+                                    );
+                                  })}
                                 </div>
                               ))}
                             </div>
@@ -1325,7 +1427,7 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
                       <span className="stat-pill">{hand.length} cards</span>
                     </div>
 
-                    {selectedCard && suggestedMelds.length + suggestedLayoffs.length > 0 ? (
+                    {selectedCard && suggestedMelds.length + suggestedLayoffs.length + suggestedJokerRetrievals.length > 0 ? (
                       <div className="suggestion-table-strip">
                         {suggestedMelds.map((suggestion) => (
                           <div className="suggestion-card" key={`table-${suggestion.kind}`}>
@@ -1357,13 +1459,32 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
                             ) : null}
                           </div>
                         ))}
+                        {suggestedJokerRetrievals.map((suggestion) => (
+                          <div className="suggestion-card" key={`table-replace-${suggestion.meldIndex}-${suggestion.jokerId}`}>
+                            <strong>{suggestion.kind === "set" ? "Replace joker in set" : "Replace joker in run"}</strong>
+                            <p>{`Swap in ${cardLabel(suggestion.replacementCard)} for ${suggestion.representedCard.rank} of ${suggestion.representedCard.suit}.`}</p>
+                            {canMeld ? (
+                              <button
+                                className="button button-secondary"
+                                onClick={() =>
+                                  startTransition(() =>
+                                    void replaceJoker(suggestion.meldIndex, suggestion.jokerId, suggestion.replacementCard.id)
+                                  )
+                                }
+                                type="button"
+                              >
+                                Replace joker
+                              </button>
+                            ) : null}
+                          </div>
+                        ))}
                       </div>
                     ) : null}
 
                     <div className="desktop-action-row">
                       <button
                         className="button"
-                        disabled={!canMeld || !selectedCard || (!primarySuggestedMeld && !primarySuggestedLayoff)}
+                        disabled={!canMeld || !selectedCard || (!primarySuggestedMeld && !primarySuggestedLayoff && !primaryJokerRetrieval)}
                         onClick={() =>
                           startTransition(() => {
                             if (primarySuggestedMeld) {
@@ -1373,11 +1494,23 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
                             if (primarySuggestedLayoff) {
                               return void playLayoff(primarySuggestedLayoff.meldIndex, primarySuggestedLayoff.card.id);
                             }
+
+                            if (primaryJokerRetrieval) {
+                              return void replaceJoker(
+                                primaryJokerRetrieval.meldIndex,
+                                primaryJokerRetrieval.jokerId,
+                                primaryJokerRetrieval.replacementCard.id
+                              );
+                            }
                           })
                         }
                         type="button"
                       >
-                        {primarySuggestedLayoff && !primarySuggestedMeld ? "Lay off" : "Meld"}
+                        {primaryJokerRetrieval && !primarySuggestedMeld && !primarySuggestedLayoff
+                          ? "Replace joker"
+                          : primarySuggestedLayoff && !primarySuggestedMeld
+                            ? "Lay off"
+                            : "Meld"}
                       </button>
                       <button
                         className="button button-secondary"
@@ -1553,16 +1686,36 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
                 <div className="mobile-meld-lane">
                   {tableSets.map((meld, index) => (
                     <div className="mobile-meld-stack" key={`mobile-set-${index}`}>
-                      {(meld.cards ?? []).map((card) => (
-                        <PlayingCardFace card={card} key={card.id} size="tiny" />
-                      ))}
+                      <span className="meld-owner-label">
+                        {meld.owner_user_id ? userLabel(meld.owner_user_id, profiles, currentUser) : "Table"}
+                      </span>
+                      {(meld.cards ?? []).map((card) => {
+                        const binding = getJokerBinding(meld, card);
+
+                        return (
+                          <div className="meld-card-stack" key={card.id}>
+                            <PlayingCardFace card={card} size="tiny" />
+                            {binding ? <JokerBindingNote binding={binding} /> : null}
+                          </div>
+                        );
+                      })}
                     </div>
                   ))}
                   {tableRuns.map((meld, index) => (
                     <div className="mobile-meld-stack" key={`mobile-run-${index}`}>
-                      {(meld.cards ?? []).map((card) => (
-                        <PlayingCardFace card={card} key={card.id} size="tiny" />
-                      ))}
+                      <span className="meld-owner-label">
+                        {meld.owner_user_id ? userLabel(meld.owner_user_id, profiles, currentUser) : "Table"}
+                      </span>
+                      {(meld.cards ?? []).map((card) => {
+                        const binding = getJokerBinding(meld, card);
+
+                        return (
+                          <div className="meld-card-stack" key={card.id}>
+                            <PlayingCardFace card={card} size="tiny" />
+                            {binding ? <JokerBindingNote binding={binding} /> : null}
+                          </div>
+                        );
+                      })}
                     </div>
                   ))}
                 </div>
@@ -1627,7 +1780,7 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
             <div className="mobile-bottom-area">
               <div className="mobile-prompt">
                 <p>{mobilePrompt}</p>
-                {selectedCard && suggestedMelds.length + suggestedLayoffs.length > 0 ? (
+                {selectedCard && suggestedMelds.length + suggestedLayoffs.length + suggestedJokerRetrievals.length > 0 ? (
                   <div className="mobile-suggestion-actions">
                     {suggestedMelds.map((suggestion) => (
                       <button
@@ -1647,6 +1800,20 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
                         type="button"
                       >
                         Lay off on {suggestion.kind}
+                      </button>
+                    ))}
+                    {suggestedJokerRetrievals.map((suggestion) => (
+                      <button
+                        className="button button-secondary"
+                        key={`mobile-replace-${suggestion.meldIndex}-${suggestion.jokerId}`}
+                        onClick={() =>
+                          startTransition(() =>
+                            void replaceJoker(suggestion.meldIndex, suggestion.jokerId, suggestion.replacementCard.id)
+                          )
+                        }
+                        type="button"
+                      >
+                        Replace joker
                       </button>
                     ))}
                   </div>
@@ -1669,7 +1836,7 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
               <div className="mobile-action-row">
                 <button
                   className="button mobile-icon-button"
-                  disabled={!canMeld || !selectedCard || (!primarySuggestedMeld && !primarySuggestedLayoff)}
+                  disabled={!canMeld || !selectedCard || (!primarySuggestedMeld && !primarySuggestedLayoff && !primaryJokerRetrieval)}
                   onClick={() =>
                     startTransition(() => {
                       if (primarySuggestedMeld) {
@@ -1679,12 +1846,26 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
                       if (primarySuggestedLayoff) {
                         return void playLayoff(primarySuggestedLayoff.meldIndex, primarySuggestedLayoff.card.id);
                       }
+
+                      if (primaryJokerRetrieval) {
+                        return void replaceJoker(
+                          primaryJokerRetrieval.meldIndex,
+                          primaryJokerRetrieval.jokerId,
+                          primaryJokerRetrieval.replacementCard.id
+                        );
+                      }
                     })
                   }
                   type="button"
                 >
                   <span>♣</span>
-                  <small>{primarySuggestedLayoff && !primarySuggestedMeld ? "Lay off" : "Meld"}</small>
+                  <small>
+                    {primaryJokerRetrieval && !primarySuggestedMeld && !primarySuggestedLayoff
+                      ? "Replace"
+                      : primarySuggestedLayoff && !primarySuggestedMeld
+                        ? "Lay off"
+                        : "Meld"}
+                  </small>
                 </button>
                 <button
                   className="button button-secondary mobile-icon-button"

@@ -1,4 +1,4 @@
-import { analyzeMeld } from "./rules";
+import { analyzeLayoff, analyzeMeld } from "./rules";
 import type { Card, TableMeld } from "./types";
 
 export interface SuggestedMeld {
@@ -13,6 +13,14 @@ export interface SuggestedLayoff {
   card: Card;
   targetCards: Card[];
   points: number;
+}
+
+export interface SuggestedJokerRetrieval {
+  meldIndex: number;
+  jokerId: string;
+  kind: "set" | "run";
+  replacementCard: Card;
+  representedCard: { rank: Exclude<Card["rank"], "JOKER">; suit: Exclude<Card["suit"], null> };
 }
 
 export type SuggestedDiscardPickupUse =
@@ -65,8 +73,7 @@ export function findSuggestedLayoffs(tableMelds: TableMeld[], selectedCard: Card
       continue;
     }
 
-    const targetCards = [...meld.cards, selectedCard];
-    const result = analyzeMeld(targetCards);
+    const result = analyzeLayoff(meld, selectedCard);
 
     if (!result.isValid || result.kind === "invalid" || result.kind !== meld.type) {
       continue;
@@ -76,9 +83,44 @@ export function findSuggestedLayoffs(tableMelds: TableMeld[], selectedCard: Card
       meldIndex,
       kind: meld.type,
       card: selectedCard,
-      targetCards,
+      targetCards: [...(meld.cards ?? []), selectedCard],
       points: result.points
     });
+  }
+
+  return suggestions;
+}
+
+export function findSuggestedJokerRetrievals(
+  tableMelds: TableMeld[],
+  selectedCard: Card,
+  allowJokerRetrieval: boolean
+): SuggestedJokerRetrieval[] {
+  if (!allowJokerRetrieval || selectedCard.isJoker || !selectedCard.suit) {
+    return [];
+  }
+
+  const suggestions: SuggestedJokerRetrieval[] = [];
+
+  for (const [meldIndex, meld] of tableMelds.entries()) {
+    const bindings = meld.joker_bindings ?? [];
+
+    for (const binding of bindings) {
+      if (binding.rank !== selectedCard.rank || binding.suit !== selectedCard.suit) {
+        continue;
+      }
+
+      suggestions.push({
+        meldIndex,
+        jokerId: binding.joker_id,
+        kind: meld.type ?? "set",
+        replacementCard: selectedCard,
+        representedCard: {
+          rank: binding.rank,
+          suit: binding.suit
+        }
+      });
+    }
   }
 
   return suggestions;

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { findSuggestedLayoffs } from "./meld-options";
-import { analyzeMeld, scoreHand } from "./rules";
+import { findSuggestedJokerRetrievals, findSuggestedLayoffs } from "./meld-options";
+import { analyzeLayoff, analyzeMeld, scoreHand } from "./rules";
 import type { Card } from "./types";
 
 function card(rank: Card["rank"], suit: Card["suit"], id: string): Card {
@@ -35,6 +35,7 @@ describe("analyzeMeld", () => {
 
     expect(result.isValid).toBe(true);
     expect(result.kind).toBe("run");
+    expect(result.jokerBindings?.[0]).toMatchObject({ joker_id: "jk", rank: "A", suit: "hearts" });
   });
 
   it("rejects mixed-suit runs", () => {
@@ -92,5 +93,37 @@ describe("findSuggestedLayoffs", () => {
 
     expect(suggestions).toHaveLength(1);
     expect(suggestions[0]?.kind).toBe("run");
+  });
+
+  it("does not reinterpret a fixed joker when laying off", () => {
+    const result = analyzeLayoff(
+      {
+        type: "run",
+        cards: [card("6", "clubs", "6c"), card("7", "clubs", "7c"), card("JOKER", null, "jk")],
+        joker_bindings: [{ joker_id: "jk", rank: "8", suit: "clubs" }]
+      },
+      card("4", "clubs", "4c")
+    );
+
+    expect(result.isValid).toBe(false);
+  });
+});
+
+describe("findSuggestedJokerRetrievals", () => {
+  it("suggests replacing a fixed joker with the exact represented card", () => {
+    const suggestions = findSuggestedJokerRetrievals(
+      [
+        {
+          type: "set",
+          cards: [card("9", "spades", "9s"), card("9", "hearts", "9h"), card("JOKER", null, "jk")],
+          joker_bindings: [{ joker_id: "jk", rank: "9", suit: "clubs" }]
+        }
+      ],
+      card("9", "clubs", "9c"),
+      true
+    );
+
+    expect(suggestions).toHaveLength(1);
+    expect(suggestions[0]?.jokerId).toBe("jk");
   });
 });
