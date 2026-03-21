@@ -161,7 +161,15 @@ Deno.serve(async (request) => {
     nextTableMelds[body.meldIndex] = {
       ...targetMeld,
       cards: (targetMeld.cards ?? []).map((card) => (card.id === body.jokerId ? replacementCard : card)),
-      joker_bindings: (targetMeld.joker_bindings ?? []).filter((binding) => binding.joker_id !== body.jokerId)
+      joker_bindings: (targetMeld.joker_bindings ?? []).filter((binding) => binding.joker_id !== body.jokerId),
+      card_owner_user_ids: {
+        ...Object.fromEntries(
+          Object.entries((targetMeld.card_owner_user_ids ?? {}) as Record<string, string>).filter(
+            ([cardId]) => cardId !== body.jokerId
+          )
+        ),
+        [replacementCard.id]: user.id
+      }
     };
 
     const actionAt = new Date().toISOString();

@@ -150,7 +150,11 @@ Deno.serve(async (request) => {
       ...targetMeld,
       type: layoff.kind,
       cards: [...(targetMeld.cards ?? []), selectedCard],
-      points: layoff.points
+      points: layoff.points,
+      card_owner_user_ids: {
+        ...((targetMeld.card_owner_user_ids ?? {}) as Record<string, string>),
+        [selectedCard.id]: user.id
+      }
     };
     const nextActionLog = [
       ...(((round.action_log ?? []) as Record<string, unknown>[]) || []),

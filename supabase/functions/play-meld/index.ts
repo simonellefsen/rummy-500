@@ -10,6 +10,7 @@ type TableMeld = {
   points: number;
   created_at: string;
   joker_bindings?: JokerBinding[];
+  card_owner_user_ids?: Record<string, string>;
 };
 
 Deno.serve(async (request) => {
@@ -179,7 +180,8 @@ Deno.serve(async (request) => {
         cards: selectedCards,
         points: meld.points,
         created_at: new Date().toISOString(),
-        joker_bindings: resolvedJokerBindings
+        joker_bindings: resolvedJokerBindings,
+        card_owner_user_ids: Object.fromEntries(selectedCards.map((card) => [card.id, user.id]))
       }
     ];
     const nextActionLog = [

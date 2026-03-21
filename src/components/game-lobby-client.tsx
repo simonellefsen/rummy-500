@@ -283,6 +283,17 @@ function JokerBindingNote({ binding }: { binding: JokerBinding }) {
   return <small className="joker-binding-note">{`${binding.rank}${binding.suit[0].toUpperCase()}`}</small>;
 }
 
+function getMeldCardOwnerId(meld: TableMeld, card: Card) {
+  return meld.card_owner_user_ids?.[card.id] ?? meld.owner_user_id ?? null;
+}
+
+function formatCardOwnerBadge(userId: string, profiles: Record<string, string | null>, currentUser?: User | null) {
+  const label = userLabel(userId, profiles, currentUser);
+  const primary = label.split(/\s+/u)[0] ?? label;
+
+  return primary.toUpperCase();
+}
+
 function formatBindingLabel(binding: JokerBinding) {
   return `${binding.rank} of ${binding.suit}`;
 }
@@ -1466,10 +1477,17 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
                                   </span>
                                   {(meld.cards ?? []).map((card) => {
                                     const binding = getJokerBinding(meld, card);
+                                    const cardOwnerId = getMeldCardOwnerId(meld, card);
+                                    const showCardOwnerBadge = !!cardOwnerId && cardOwnerId !== meld.owner_user_id;
 
                                     return (
                                       <div className="meld-card-stack" key={card.id}>
                                         <PlayingCardFace card={card} size="tiny" />
+                                        {showCardOwnerBadge ? (
+                                          <small className="meld-card-owner-badge">
+                                            {formatCardOwnerBadge(cardOwnerId, profiles, currentUser)}
+                                          </small>
+                                        ) : null}
                                         {binding ? <JokerBindingNote binding={binding} /> : null}
                                       </div>
                                     );
@@ -1492,10 +1510,17 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
                                   </span>
                                   {(meld.cards ?? []).map((card) => {
                                     const binding = getJokerBinding(meld, card);
+                                    const cardOwnerId = getMeldCardOwnerId(meld, card);
+                                    const showCardOwnerBadge = !!cardOwnerId && cardOwnerId !== meld.owner_user_id;
 
                                     return (
                                       <div className="meld-card-stack" key={card.id}>
                                         <PlayingCardFace card={card} size="tiny" />
+                                        {showCardOwnerBadge ? (
+                                          <small className="meld-card-owner-badge">
+                                            {formatCardOwnerBadge(cardOwnerId, profiles, currentUser)}
+                                          </small>
+                                        ) : null}
                                         {binding ? <JokerBindingNote binding={binding} /> : null}
                                       </div>
                                     );
@@ -1786,10 +1811,17 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
                       </span>
                       {(meld.cards ?? []).map((card) => {
                         const binding = getJokerBinding(meld, card);
+                        const cardOwnerId = getMeldCardOwnerId(meld, card);
+                        const showCardOwnerBadge = !!cardOwnerId && cardOwnerId !== meld.owner_user_id;
 
                         return (
                           <div className="meld-card-stack" key={card.id}>
                             <PlayingCardFace card={card} size="tiny" />
+                            {showCardOwnerBadge ? (
+                              <small className="meld-card-owner-badge">
+                                {formatCardOwnerBadge(cardOwnerId, profiles, currentUser)}
+                              </small>
+                            ) : null}
                             {binding ? <JokerBindingNote binding={binding} /> : null}
                           </div>
                         );
@@ -1803,10 +1835,17 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
                       </span>
                       {(meld.cards ?? []).map((card) => {
                         const binding = getJokerBinding(meld, card);
+                        const cardOwnerId = getMeldCardOwnerId(meld, card);
+                        const showCardOwnerBadge = !!cardOwnerId && cardOwnerId !== meld.owner_user_id;
 
                         return (
                           <div className="meld-card-stack" key={card.id}>
                             <PlayingCardFace card={card} size="tiny" />
+                            {showCardOwnerBadge ? (
+                              <small className="meld-card-owner-badge">
+                                {formatCardOwnerBadge(cardOwnerId, profiles, currentUser)}
+                              </small>
+                            ) : null}
                             {binding ? <JokerBindingNote binding={binding} /> : null}
                           </div>
                         );

@@ -72,6 +72,7 @@ export interface TableMeld {
   points?: number;
   created_at?: string;
   joker_bindings?: JokerBinding[];
+  card_owner_user_ids?: Record<string, string>;
 }
 
 export interface HandScoreInput {
