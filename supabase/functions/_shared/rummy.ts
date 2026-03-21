@@ -24,6 +24,22 @@ export interface MeldAnalysis {
   reason?: string;
 }
 
+export function scoreCard(card: Card) {
+  if (card.isJoker || card.rank === "A") {
+    return 15;
+  }
+
+  if (card.rank === "J" || card.rank === "Q" || card.rank === "K") {
+    return 10;
+  }
+
+  return Number(card.rank);
+}
+
+export function scoreCards(cards: Card[]) {
+  return cards.reduce((total, card) => total + scoreCard(card), 0);
+}
+
 export function analyzeMeld(cards: Card[]): MeldAnalysis {
   if (cards.length < 3) {
     return invalidMeld("Melds require at least three cards.");
@@ -179,22 +195,6 @@ function rankToSequenceValue(rank: Rank, aceMode: "low" | "high") {
   }
 
   return Number(rank);
-}
-
-function scoreCards(cards: Card[]) {
-  return cards.reduce((total, card) => total + scoreCard(card), 0);
-}
-
-function scoreCard(card: Card) {
-  if (card.isJoker || card.rank === "A") {
-    return 15;
-  }
-
-  if (card.rank === "J" || card.rank === "Q" || card.rank === "K") {
-    return 10;
-  }
-
-  return Number(card.rank);
 }
 
 function invalidMeld(reason: string): MeldAnalysis {

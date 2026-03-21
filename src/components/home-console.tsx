@@ -123,6 +123,7 @@ export function HomeConsole() {
   const [guestName, setGuestName] = useState(createGuestName);
   const [joinCode, setJoinCode] = useState("");
   const [maxPlayers, setMaxPlayers] = useState(4);
+  const [mustDiscardToGoOut, setMustDiscardToGoOut] = useState(true);
   const [games, setGames] = useState<DashboardGame[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
@@ -350,7 +351,7 @@ export function HomeConsole() {
           aceCanBeLow: true,
           aceCanBeHigh: true,
           minimumInitialMeldPoints: 0,
-          mustDiscardToGoOut: false
+          mustDiscardToGoOut
         }
       }
     });
@@ -532,6 +533,18 @@ export function HomeConsole() {
                 </button>
               </div>
             </div>
+
+            <label className="field">
+              <span>Go out rule</span>
+              <div className="toggle-row">
+                <input
+                  checked={mustDiscardToGoOut}
+                  onChange={(event) => setMustDiscardToGoOut(event.target.checked)}
+                  type="checkbox"
+                />
+                <span>Require a final discard to go out</span>
+              </div>
+            </label>
 
             <div className="form-grid two-up">
               <label className="field">

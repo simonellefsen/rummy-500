@@ -224,6 +224,27 @@ a {
   letter-spacing: 0.03em;
 }
 
+.toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  min-height: 3rem;
+  border-radius: 16px;
+  border: 1px solid rgba(243, 239, 223, 0.14);
+  background: rgba(4, 14, 21, 0.45);
+  padding: 0.8rem 1rem;
+}
+
+.toggle-row input {
+  width: 1rem;
+  height: 1rem;
+}
+
+.toggle-row span {
+  color: var(--text);
+  font-size: 0.98rem;
+}
+
 .action-field {
   align-content: end;
 }

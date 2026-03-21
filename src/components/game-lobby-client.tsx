@@ -16,6 +16,7 @@ interface GameRow {
   invite_code: string;
   status: string;
   host_user_id: string;
+  winner_user_id: string | null;
   turn_user_id: string | null;
   turn_stage: "awaiting_draw" | "awaiting_discard";
   round_number: number;
@@ -316,7 +317,7 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
             supabase
               .schema("rummy500")
               .from("games")
-              .select("id, invite_code, status, host_user_id, turn_user_id, turn_stage, round_number, config, started_at")
+              .select("id, invite_code, status, host_user_id, winner_user_id, turn_user_id, turn_stage, round_number, config, started_at")
               .eq("id", gameId)
               .single(),
             supabase
@@ -470,7 +471,7 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
         supabase
           .schema("rummy500")
           .from("games")
-          .select("id, invite_code, status, host_user_id, turn_user_id, turn_stage, round_number, config, started_at")
+          .select("id, invite_code, status, host_user_id, winner_user_id, turn_user_id, turn_stage, round_number, config, started_at")
           .eq("id", gameId)
           .single(),
         supabase
@@ -855,6 +856,7 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
         : `${activeTurnLabel} is up next.`;
   const primarySuggestedMeld = suggestedMelds[0] ?? null;
   const primarySuggestedLayoff = suggestedLayoffs[0] ?? null;
+  const winnerLabel = game?.winner_user_id ? userLabel(game.winner_user_id, profiles, currentUser) : null;
 
   return (
     <main className="page-shell">
@@ -884,6 +886,8 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
               : "Your turn. Lay down a set or run, or discard to end it."
             : `${activeTurnLabel} is up next.`}
         </p>
+      ) : game?.status === "finished" && winnerLabel ? (
+        <p className="banner banner-success">{winnerLabel} went out and ended the hand.</p>
       ) : null}
 
       {!currentUser ? (

@@ -59,7 +59,7 @@ Deno.serve(async (request) => {
     const { data: game, error: gameError } = await supabase
       .schema("rummy500")
       .from("games")
-      .select("id, status, turn_user_id, turn_stage, round_number")
+      .select("id, status, turn_user_id, turn_stage, round_number, config")
       .eq("id", body.gameId)
       .single();
 
@@ -122,6 +122,16 @@ Deno.serve(async (request) => {
     }
 
     const nextHand = cards.filter((card) => !selectedIds.includes(card.id));
+    const mustDiscardToGoOut =
+      typeof game.config?.variants?.mustDiscardToGoOut === "boolean" ? game.config.variants.mustDiscardToGoOut : true;
+
+    if (nextHand.length === 0 && mustDiscardToGoOut) {
+      return Response.json(
+        { error: "This table requires a final discard to go out. Keep one card to discard." },
+        { status: 409, headers: corsHeaders }
+      );
+    }
+
     const nextTableMelds = [
       ...(((round.table_melds ?? []) as TableMeld[]) || []),
       {
@@ -154,6 +164,31 @@ Deno.serve(async (request) => {
       throw updateHandError;
     }
 
+    const { data: playerRow, error: playerError } = await supabase
+      .schema("rummy500")
+      .from("game_players")
+      .select("current_hand_score")
+      .eq("game_id", body.gameId)
+      .eq("user_id", user.id)
+      .single();
+
+    if (playerError) {
+      throw playerError;
+    }
+
+    const { error: scoreError } = await supabase
+      .schema("rummy500")
+      .from("game_players")
+      .update({
+        current_hand_score: (typeof playerRow?.current_hand_score === "number" ? playerRow.current_hand_score : 0) + meld.points
+      })
+      .eq("game_id", body.gameId)
+      .eq("user_id", user.id);
+
+    if (scoreError) {
+      throw scoreError;
+    }
+
     const { error: updateRoundError } = await supabase
       .schema("rummy500")
       .from("game_rounds")
@@ -181,6 +216,30 @@ Deno.serve(async (request) => {
 
     if (actionError) {
       throw actionError;
+    }
+
+    if (nextHand.length === 0 && !mustDiscardToGoOut) {
+      const { data: finishData, error: finishError } = await supabase.schema("rummy500").rpc("finish_hand", {
+        p_game_id: body.gameId,
+        p_round_id: round.id,
+        p_winner_user_id: user.id,
+        p_finish_reason: "meld_go_out"
+      });
+
+      if (finishError) {
+        throw finishError;
+      }
+
+      return Response.json(
+        {
+          meldType: meld.kind,
+          points: meld.points,
+          remainingHandCount: nextHand.length,
+          handFinished: true,
+          result: finishData
+        },
+        { headers: corsHeaders }
+      );
     }
 
     return Response.json(

@@ -137,6 +137,7 @@ Deno.serve(async (request) => {
     }
 
     const playerCount = players.length;
+    const existingVariants = typeof game.config?.variants === "object" && game.config.variants ? game.config.variants : {};
     const config = {
       decks: typeof game.config?.decks === "number" ? game.config.decks : playerCount >= 5 ? 2 : 1,
       jokers: typeof game.config?.jokers === "number" ? game.config.jokers : playerCount >= 5 ? 4 : 2,
@@ -145,7 +146,15 @@ Deno.serve(async (request) => {
     };
     const resolvedConfig = {
       ...(typeof game.config === "object" && game.config ? game.config : {}),
-      ...config
+      ...config,
+      variants: {
+        aceCanBeLow: true,
+        aceCanBeHigh: true,
+        minimumInitialMeldPoints: 0,
+        mustDiscardToGoOut:
+          typeof existingVariants.mustDiscardToGoOut === "boolean" ? existingVariants.mustDiscardToGoOut : true,
+        ...existingVariants
+      }
     };
 
     const roundNumber = Number(game.round_number) + 1;
@@ -215,6 +224,16 @@ Deno.serve(async (request) => {
 
     if (handsError) {
       throw handsError;
+    }
+
+    const { error: resetScoresError } = await supabase
+      .schema("rummy500")
+      .from("game_players")
+      .update({ current_hand_score: 0 })
+      .eq("game_id", body.gameId);
+
+    if (resetScoresError) {
+      throw resetScoresError;
     }
 
     const { error: updateGameError } = await supabase
