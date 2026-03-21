@@ -1434,7 +1434,7 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
                                     type="button"
                                   >
                                     <PlayingCardFace card={card} size="tiny" />
-                                    <small>{index === discardCount - 1 ? "Top" : `Take ${discardCount - index}`}</small>
+                                    <small>{`#${discardCount - index}`}</small>
                                   </button>
                                 ))
                               ) : (
@@ -1881,7 +1881,7 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
                             type="button"
                           >
                             <PlayingCardFace card={card} size="tiny" />
-                            <span>{index === discardCount - 1 ? "Top" : `${discardCount - index}`}</span>
+                            <span>{`#${discardCount - index}`}</span>
                           </button>
                         ))
                       ) : (
