@@ -306,6 +306,13 @@ function formatBindingSet(bindings: JokerBinding[]) {
   return bindings.map((binding, index) => `Joker ${index + 1}: ${formatBindingLabel(binding)}`).join(" · ");
 }
 
+function suggestedMeldKey(suggestion: SuggestedMeld) {
+  return `${suggestion.kind}:${suggestion.cards
+    .map((card) => card.id)
+    .sort()
+    .join(",")}`;
+}
+
 function sortHandCards(hand: Card[], mode: "natural" | "rank" | "suit") {
   if (mode === "natural") {
     return hand;
@@ -1292,7 +1299,7 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
                       {suggestedMelds.length > 0 || suggestedLayoffs.length > 0 || suggestedJokerRetrievals.length > 0 ? (
                         <div className="suggestion-list">
                           {suggestedMelds.map((suggestion) => (
-                            <div className="suggestion-card" key={`${selectedCard.id}-${suggestion.kind}`}>
+                            <div className="suggestion-card" key={suggestedMeldKey(suggestion)}>
                               <strong>{suggestion.kind === "set" ? "Possible set" : "Possible run"}</strong>
                               <p>{suggestion.cards.map((card) => cardLabel(card)).join(" · ")}</p>
                               {canMeld ? (
@@ -1548,7 +1555,7 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
                     {selectedCard && suggestedMelds.length + suggestedLayoffs.length + suggestedJokerRetrievals.length > 0 ? (
                       <div className="suggestion-table-strip">
                         {suggestedMelds.map((suggestion) => (
-                          <div className="suggestion-card" key={`table-${suggestion.kind}`}>
+                          <div className="suggestion-card" key={`table-${suggestedMeldKey(suggestion)}`}>
                             <strong>{suggestion.kind === "set" ? "Possible set" : "Possible run"}</strong>
                             <p>{suggestion.cards.map((card) => cardLabel(card)).join(" · ")}</p>
                             {canMeld ? (
@@ -1922,7 +1929,7 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
                     {suggestedMelds.map((suggestion) => (
                       <button
                         className="button button-secondary"
-                        key={`mobile-${suggestion.kind}`}
+                        key={`mobile-${suggestedMeldKey(suggestion)}`}
                         onClick={() => startTransition(() => requestPlaySuggestedMeld(suggestion))}
                         type="button"
                       >

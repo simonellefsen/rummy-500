@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { findSuggestedJokerRetrievals, findSuggestedLayoffs } from "./meld-options";
+import { findSuggestedJokerRetrievals, findSuggestedLayoffs, findSuggestedMelds } from "./meld-options";
 import { analyzeLayoff, analyzeMeld, scoreHand } from "./rules";
 import type { Card } from "./types";
 
@@ -125,5 +125,54 @@ describe("findSuggestedJokerRetrievals", () => {
 
     expect(suggestions).toHaveLength(1);
     expect(suggestions[0]?.jokerId).toBe("jk");
+  });
+});
+
+describe("findSuggestedMelds", () => {
+  it("prefers natural melds before joker-based melds", () => {
+    const suggestions = findSuggestedMelds(
+      [
+        card("9", "clubs", "9c"),
+        card("9", "hearts", "9h"),
+        card("9", "diamonds", "9d"),
+        card("JOKER", null, "jk")
+      ],
+      "9c"
+    );
+
+    expect(suggestions[0]).toMatchObject({
+      kind: "set",
+      cards: expect.arrayContaining([expect.objectContaining({ id: "9h" }), expect.objectContaining({ id: "9d" })])
+    });
+    expect(suggestions[0]?.cards.some((candidate) => candidate.id === "jk")).toBe(false);
+  });
+
+  it("returns multiple natural run suggestions around the selected card before joker runs", () => {
+    const suggestions = findSuggestedMelds(
+      [
+        card("7", "clubs", "7c"),
+        card("8", "clubs", "8c"),
+        card("9", "clubs", "9c"),
+        card("10", "clubs", "10c"),
+        card("JOKER", null, "jk")
+      ],
+      "9c"
+    );
+
+    const naturalRuns = suggestions.filter(
+      (suggestion) => suggestion.kind === "run" && suggestion.cards.every((candidate) => !candidate.isJoker)
+    );
+
+    expect(naturalRuns).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          cards: expect.arrayContaining([expect.objectContaining({ id: "7c" }), expect.objectContaining({ id: "8c" })])
+        }),
+        expect.objectContaining({
+          cards: expect.arrayContaining([expect.objectContaining({ id: "8c" }), expect.objectContaining({ id: "10c" })])
+        })
+      ])
+    );
+    expect(suggestions[0]?.cards.some((candidate) => candidate.id === "jk")).toBe(false);
   });
 });

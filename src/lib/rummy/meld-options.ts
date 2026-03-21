@@ -44,27 +44,30 @@ export function findSuggestedMelds(hand: Card[], selectedCardId: string): Sugges
   }
 
   const otherCards = hand.filter((card) => card.id !== selectedCardId);
-  const suggestions = new Map<"set" | "run", SuggestedMeld>();
+  const suggestions = new Map<string, SuggestedMeld>();
 
   for (const comboSize of [2, 3]) {
     for (const combo of buildCombinations(otherCards, comboSize)) {
       const candidate = [selectedCard, ...combo];
       const result = analyzeMeld(candidate);
 
-      if (!result.isValid || result.kind === "invalid" || suggestions.has(result.kind)) {
+      if (!result.isValid || result.kind === "invalid") {
         continue;
       }
 
-      suggestions.set(result.kind, {
+      const suggestion: SuggestedMeld = {
         kind: result.kind,
         cards: candidate,
         points: result.points,
         jokerBindingOptions: getMeldBindingOptions(candidate, result.kind)
-      });
+      };
+      suggestions.set(getSuggestedMeldKey(suggestion), suggestion);
     }
   }
 
-  return [...suggestions.values()];
+  return [...suggestions.values()]
+    .sort(compareSuggestedMelds)
+    .slice(0, 6);
 }
 
 export function findSuggestedLayoffs(tableMelds: TableMeld[], selectedCard: Card): SuggestedLayoff[] {
@@ -199,4 +202,44 @@ function buildCombinations(cards: Card[], size: number, start = 0, prefix: Card[
   }
 
   return combinations;
+}
+
+function getSuggestedMeldKey(suggestion: SuggestedMeld) {
+  return `${suggestion.kind}:${suggestion.cards
+    .map((card) => card.id)
+    .sort()
+    .join(",")}`;
+}
+
+function compareSuggestedMelds(left: SuggestedMeld, right: SuggestedMeld) {
+  const jokerCountDifference = countJokers(left.cards) - countJokers(right.cards);
+
+  if (jokerCountDifference !== 0) {
+    return jokerCountDifference;
+  }
+
+  const cardCountDifference = left.cards.length - right.cards.length;
+
+  if (cardCountDifference !== 0) {
+    return cardCountDifference;
+  }
+
+  if (left.kind !== right.kind) {
+    return left.kind === "run" ? -1 : 1;
+  }
+
+  return left.cards
+    .map((card) => card.id)
+    .sort()
+    .join(",")
+    .localeCompare(
+      right.cards
+        .map((card) => card.id)
+        .sort()
+        .join(",")
+    );
+}
+
+function countJokers(cards: Card[]) {
+  return cards.filter((card) => card.isJoker).length;
 }
