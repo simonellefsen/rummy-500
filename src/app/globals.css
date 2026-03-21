@@ -452,6 +452,19 @@ a {
   grid-template-columns: auto 1fr auto;
 }
 
+.mobile-gear-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  border: 1px solid rgba(243, 239, 223, 0.14);
+  background: rgba(9, 23, 34, 0.74);
+  color: var(--text);
+  font-size: 1.2rem;
+}
+
 .mobile-menu-link {
   color: var(--muted);
   text-decoration: none;
@@ -476,6 +489,95 @@ a {
 
 .mobile-refresh {
   padding-inline: 0.9rem;
+}
+
+.mobile-settings-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  background: rgba(3, 10, 16, 0.56);
+  backdrop-filter: blur(8px);
+  display: grid;
+  align-items: start;
+  padding: 1rem;
+}
+
+.mobile-settings-sheet {
+  display: grid;
+  gap: 1rem;
+  border-radius: 28px;
+  border: 1px solid rgba(243, 239, 223, 0.12);
+  background: rgba(7, 21, 30, 0.96);
+  box-shadow: 0 28px 60px rgba(0, 0, 0, 0.28);
+  padding: 1rem;
+}
+
+.mobile-settings-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+}
+
+.mobile-settings-head h3 {
+  margin: 0.15rem 0 0;
+  font-family: var(--display-font);
+  font-size: 1.6rem;
+}
+
+.mobile-close-button {
+  padding-inline: 0.9rem;
+}
+
+.mobile-settings-grid {
+  display: grid;
+  gap: 0.7rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.mobile-settings-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}
+
+.mobile-settings-card {
+  display: grid;
+  gap: 0.45rem;
+  border-radius: 20px;
+  border: 1px solid rgba(243, 239, 223, 0.08);
+  background: rgba(10, 27, 38, 0.88);
+  padding: 0.95rem;
+}
+
+.mobile-settings-card p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.mobile-ai-row {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+
+.mobile-ai-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.15rem;
+  height: 2.15rem;
+  border-radius: 999px;
+  border: 1px solid rgba(243, 239, 223, 0.1);
+  background: rgba(243, 239, 223, 0.06);
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.mobile-ai-pill.is-disabled {
+  opacity: 0.45;
 }
 
 .mobile-table-zone {
@@ -619,6 +721,25 @@ a {
   display: grid;
   gap: 0.7rem;
   grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.mobile-icon-button {
+  min-height: 58px;
+  padding: 0.45rem 0.6rem;
+  border-radius: 20px;
+  display: grid;
+  justify-items: center;
+  gap: 0.15rem;
+}
+
+.mobile-icon-button span {
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.mobile-icon-button small {
+  font-size: 0.8rem;
+  letter-spacing: 0.02em;
 }
 
 .game-table-surface {
@@ -1124,6 +1245,10 @@ a {
   }
 
   .mobile-action-row {
+    grid-template-columns: 1fr;
+  }
+
+  .mobile-settings-grid {
     grid-template-columns: 1fr;
   }
 

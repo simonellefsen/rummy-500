@@ -286,6 +286,7 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
   const [startGameDiagnostics, setStartGameDiagnostics] = useState<StartGameDiagnostics | null>(null);
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [handSortMode, setHandSortMode] = useState<"natural" | "rank" | "suit">("rank");
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   useEffect(() => {
@@ -742,6 +743,32 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
     }
   }
 
+  async function shareInvite() {
+    if (!game?.invite_code || typeof window === "undefined") {
+      return;
+    }
+
+    const inviteUrl = `${window.location.origin}/games/${gameId}`;
+    const shareData = {
+      title: "Rummy 500",
+      text: `Join my Rummy 500 lobby with code ${game.invite_code}`,
+      url: inviteUrl
+    };
+
+    try {
+      if (navigator.share) {
+        await navigator.share(shareData);
+        setStatusMessage("Invite shared.");
+        return;
+      }
+
+      await navigator.clipboard.writeText(`${shareData.text}\n${inviteUrl}`);
+      setStatusMessage("Invite link copied.");
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Failed to share invite.");
+    }
+  }
+
   const currentUser = session?.user ?? null;
   const currentPlayer = players.find((player) => player.user_id === currentUser?.id) ?? null;
   const otherPlayers = players.filter((player) => player.user_id !== currentUser?.id);
@@ -1076,9 +1103,14 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
 
           <section className="mobile-game-shell mobile-only">
             <div className="mobile-topbar">
-              <Link className="mobile-menu-link" href="/">
-                Back
-              </Link>
+              <button
+                aria-label="Open lobby settings"
+                className="mobile-gear-button"
+                onClick={() => setSettingsOpen(true)}
+                type="button"
+              >
+                ⚙
+              </button>
               <div className="mobile-title-lockup">
                 <h2>Rummy 500</h2>
                 <span>{activeTurnLabel}</span>
@@ -1091,6 +1123,73 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
                 Refresh
               </button>
             </div>
+
+            {settingsOpen ? (
+              <div className="mobile-settings-overlay" onClick={() => setSettingsOpen(false)} role="presentation">
+                <section className="mobile-settings-sheet" onClick={(event) => event.stopPropagation()}>
+                  <div className="mobile-settings-head">
+                    <div>
+                      <p className="eyebrow">Lobby settings</p>
+                      <h3>{game?.invite_code ? `Code ${game.invite_code}` : "Invite players"}</h3>
+                    </div>
+                    <button className="button button-ghost mobile-close-button" onClick={() => setSettingsOpen(false)} type="button">
+                      Close
+                    </button>
+                  </div>
+
+                  <div className="mobile-settings-grid">
+                    <button className="button button-secondary" onClick={() => startTransition(() => void copyCode())} type="button">
+                      Copy code
+                    </button>
+                    <button className="button" onClick={() => startTransition(() => void shareInvite())} type="button">
+                      Share invite
+                    </button>
+                    <Link className="button button-ghost mobile-settings-link" href="/">
+                      Back to lobby list
+                    </Link>
+                  </div>
+
+                  <div className="mobile-settings-card">
+                    <strong>Lobby</strong>
+                    <p>Invite players with code <code>{game?.invite_code ?? "----"}</code>.</p>
+                    <p>{players.length} seated. Host can start once all seated players are ready.</p>
+                  </div>
+
+                  <div className="mobile-settings-card">
+                    <strong>AI opponents</strong>
+                    <p>Planned for 1-3 bot seats plus you, but bot gameplay is not implemented yet.</p>
+                    <div className="mobile-ai-row" aria-disabled="true">
+                      <span className="mobile-ai-pill is-disabled">0</span>
+                      <span className="mobile-ai-pill is-disabled">1</span>
+                      <span className="mobile-ai-pill is-disabled">2</span>
+                      <span className="mobile-ai-pill is-disabled">3</span>
+                    </div>
+                  </div>
+
+                  {currentPlayer ? (
+                    <div className="mobile-settings-grid">
+                      <button
+                        className="button button-ghost"
+                        onClick={() => startTransition(() => void updateReady(!currentPlayer.ready))}
+                        type="button"
+                      >
+                        {currentPlayer.ready ? "Not ready" : "Ready up"}
+                      </button>
+                      {game?.host_user_id === currentUser.id ? (
+                        <button
+                          className="button button-google"
+                          disabled={!canStart || isPending}
+                          onClick={() => startTransition(() => void startGame())}
+                          type="button"
+                        >
+                          Start hand
+                        </button>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </section>
+              </div>
+            ) : null}
 
             {mobileTopPlayer ? (
               <div className={`mobile-seat top ${game?.turn_user_id === mobileTopPlayer.user_id ? "is-active" : ""}`}>
@@ -1202,23 +1301,25 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
 
               <div className="mobile-action-row">
                 <button
-                  className="button"
+                  className="button mobile-icon-button"
                   disabled={!canMeld || !selectedCard || suggestedMelds.length === 0}
                   onClick={() => startTransition(() => void playSuggestedMeld(suggestedMelds[0].cards.map((card) => card.id)))}
                   type="button"
                 >
-                  Meld selected
+                  <span>♣</span>
+                  <small>Meld</small>
                 </button>
                 <button
-                  className="button button-secondary"
+                  className="button button-secondary mobile-icon-button"
                   disabled={!canDiscard || !selectedCard}
                   onClick={() => startTransition(() => void playTurnAction("discard_card", selectedCard?.id))}
                   type="button"
                 >
-                  Discard selected
+                  <span>↗</span>
+                  <small>Discard</small>
                 </button>
                 <button
-                  className="button button-ghost"
+                  className="button button-ghost mobile-icon-button"
                   onClick={() =>
                     setHandSortMode((currentSortMode) =>
                       currentSortMode === "rank" ? "suit" : currentSortMode === "suit" ? "natural" : "rank"
@@ -1226,7 +1327,8 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
                   }
                   type="button"
                 >
-                  Sort hand
+                  <span>⇅</span>
+                  <small>Sort</small>
                 </button>
               </div>
 
