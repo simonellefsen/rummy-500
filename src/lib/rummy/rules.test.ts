@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { findSuggestedLayoffs } from "./meld-options";
 import { analyzeMeld, scoreHand } from "./rules";
 import type { Card } from "./types";
 
@@ -56,5 +57,40 @@ describe("scoreHand", () => {
     });
 
     expect(total).toBe(10);
+  });
+});
+
+describe("findSuggestedLayoffs", () => {
+  it("suggests adding a fourth card to a set on the table", () => {
+    const queenDiamonds = card("Q", "diamonds", "qd");
+    const suggestions = findSuggestedLayoffs(
+      [
+        {
+          type: "set",
+          cards: [card("Q", "spades", "qs"), card("Q", "clubs", "qc"), card("Q", "hearts", "qh")]
+        }
+      ],
+      queenDiamonds
+    );
+
+    expect(suggestions).toHaveLength(1);
+    expect(suggestions[0]?.kind).toBe("set");
+    expect(suggestions[0]?.meldIndex).toBe(0);
+  });
+
+  it("suggests extending a run on the table", () => {
+    const sevenHearts = card("7", "hearts", "7h");
+    const suggestions = findSuggestedLayoffs(
+      [
+        {
+          type: "run",
+          cards: [card("4", "hearts", "4h"), card("5", "hearts", "5h"), card("6", "hearts", "6h")]
+        }
+      ],
+      sevenHearts
+    );
+
+    expect(suggestions).toHaveLength(1);
+    expect(suggestions[0]?.kind).toBe("run");
   });
 });

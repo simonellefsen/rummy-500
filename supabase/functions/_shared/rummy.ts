@@ -1,6 +1,14 @@
 export type Suit = "clubs" | "diamonds" | "hearts" | "spades";
 export type Rank = "A" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "10" | "J" | "Q" | "K" | "JOKER";
 
+export type TableMeld = {
+  owner_user_id?: string;
+  type?: "set" | "run";
+  cards?: Card[];
+  points?: number;
+  created_at?: string;
+};
+
 export interface Card {
   id: string;
   deck: number;
@@ -38,6 +46,24 @@ export function analyzeMeld(cards: Card[]): MeldAnalysis {
   }
 
   return invalidMeld(`${setResult.reason} ${runResult.reason}`.trim());
+}
+
+export function analyzeLayoff(meld: TableMeld, card: Card): MeldAnalysis {
+  if (!meld.type || !Array.isArray(meld.cards) || meld.cards.length < 3) {
+    return invalidMeld("Target meld is invalid.");
+  }
+
+  const result = analyzeMeld([...meld.cards, card]);
+
+  if (!result.isValid || result.kind === "invalid") {
+    return result;
+  }
+
+  if (result.kind !== meld.type) {
+    return invalidMeld("Card does not fit the selected meld.");
+  }
+
+  return result;
 }
 
 function analyzeSet(cards: Card[]): MeldAnalysis {

@@ -10,3 +10,6 @@ verify_jwt = false
 
 [functions.play-meld]
 verify_jwt = false
+
+[functions.play-layoff]
+verify_jwt = false

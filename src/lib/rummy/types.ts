@@ -56,6 +56,14 @@ export interface MeldAnalysis {
   reason?: string;
 }
 
+export interface TableMeld {
+  owner_user_id?: string;
+  type?: "set" | "run";
+  cards?: Card[];
+  points?: number;
+  created_at?: string;
+}
+
 export interface HandScoreInput {
   melded: Card[];
   laidOff: Card[];

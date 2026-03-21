@@ -1,9 +1,17 @@
 import { analyzeMeld } from "./rules";
-import type { Card } from "./types";
+import type { Card, TableMeld } from "./types";
 
 export interface SuggestedMeld {
   kind: "set" | "run";
   cards: Card[];
+  points: number;
+}
+
+export interface SuggestedLayoff {
+  meldIndex: number;
+  kind: "set" | "run";
+  card: Card;
+  targetCards: Card[];
   points: number;
 }
 
@@ -35,6 +43,33 @@ export function findSuggestedMelds(hand: Card[], selectedCardId: string): Sugges
   }
 
   return [...suggestions.values()];
+}
+
+export function findSuggestedLayoffs(tableMelds: TableMeld[], selectedCard: Card): SuggestedLayoff[] {
+  const suggestions: SuggestedLayoff[] = [];
+
+  for (const [meldIndex, meld] of tableMelds.entries()) {
+    if (!meld.type || !Array.isArray(meld.cards) || meld.cards.length < 3) {
+      continue;
+    }
+
+    const targetCards = [...meld.cards, selectedCard];
+    const result = analyzeMeld(targetCards);
+
+    if (!result.isValid || result.kind === "invalid" || result.kind !== meld.type) {
+      continue;
+    }
+
+    suggestions.push({
+      meldIndex,
+      kind: meld.type,
+      card: selectedCard,
+      targetCards,
+      points: result.points
+    });
+  }
+
+  return suggestions;
 }
 
 function buildCombinations(cards: Card[], size: number, start = 0, prefix: Card[] = []): Card[][] {

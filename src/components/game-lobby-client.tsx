@@ -6,8 +6,8 @@ import { useEffect, useState, useTransition } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 
 import { cardLabel } from "../lib/rummy/cards";
-import { findSuggestedMelds } from "../lib/rummy/meld-options";
-import type { Card } from "../lib/rummy/types";
+import { findSuggestedLayoffs, findSuggestedMelds } from "../lib/rummy/meld-options";
+import type { Card, TableMeld } from "../lib/rummy/types";
 import { createBrowserSupabaseClient } from "../lib/supabase/client";
 import { getPublicSupabaseEnv } from "../lib/supabase/env";
 
@@ -37,7 +37,7 @@ interface RoundRow {
   status: string;
   stock_count: number;
   discard_pile: Card[];
-  table_melds: Array<{ cards?: Card[]; owner_user_id?: string; type?: string }>;
+  table_melds: TableMeld[];
 }
 
 interface ActionRow {
@@ -681,6 +681,42 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
     await refreshLobby();
   }
 
+  async function playLayoff(meldIndex: number, cardId: string) {
+    setErrorMessage(null);
+    setStatusMessage(null);
+
+    const {
+      data: { session: currentSession },
+      error: sessionError
+    } = await supabase.auth.getSession();
+
+    if (sessionError) {
+      setErrorMessage(sessionError.message);
+      return;
+    }
+
+    if (!currentSession?.access_token) {
+      setErrorMessage("No Supabase session token is available in the browser.");
+      return;
+    }
+
+    const response = await postEdgeFunction("play-layoff", { gameId, cardId, meldIndex }, currentSession.access_token);
+
+    if (!response.ok) {
+      const message =
+        typeof response.body === "object" && response.body && "error" in response.body
+          ? String(response.body.error)
+          : response.rawBody || `play-layoff failed with status ${response.status}`;
+
+      setErrorMessage(message);
+      return;
+    }
+
+    setSelectedCardId(null);
+    setStatusMessage("Card laid off on an existing meld.");
+    await refreshLobby();
+  }
+
   async function runStartGameDiagnostics() {
     setErrorMessage(null);
     setStatusMessage(null);
@@ -781,6 +817,7 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
   const selectedCard = hand.find((card) => card.id === selectedCardId) ?? null;
   const sortedHand = sortHandCards(hand, handSortMode);
   const suggestedMelds = selectedCard ? findSuggestedMelds(hand, selectedCard.id) : [];
+  const suggestedLayoffs = selectedCard ? findSuggestedLayoffs(round?.table_melds ?? [], selectedCard) : [];
   const tableSets = (round?.table_melds ?? []).filter((meld) => meld.type === "set");
   const tableRuns = (round?.table_melds ?? []).filter((meld) => meld.type === "run");
   const canStart =
@@ -800,18 +837,24 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
     : canDraw
       ? "It's your turn. Start by drawing a card from the stock or the discard pile."
       : canMeld
-        ? selectedCard && suggestedMelds.length > 0
-          ? "Selected card can form a meld. Play it or discard another card."
+        ? selectedCard && suggestedMelds.length + suggestedLayoffs.length > 0
+          ? suggestedLayoffs.length > 0
+            ? "Selected card can be laid off on the table or used in a new meld."
+            : "Selected card can form a meld. Play it or discard another card."
           : "It's your turn. Select a card to see meld options, or pick a card to discard."
         : `${activeTurnLabel} is up next.`;
   const desktopPrompt =
     canDraw
       ? "Your turn: draw from the stock or take the top discard."
       : canMeld
-        ? selectedCard && suggestedMelds.length > 0
-          ? "Selected card can be melded. Play it or discard to end your turn."
+        ? selectedCard && suggestedMelds.length + suggestedLayoffs.length > 0
+          ? suggestedLayoffs.length > 0
+            ? "Selected card can be laid off on an existing meld or used in a new meld."
+            : "Selected card can be melded. Play it or discard to end your turn."
           : "Your turn: select a card in your hand, then meld or discard."
         : `${activeTurnLabel} is up next.`;
+  const primarySuggestedMeld = suggestedMelds[0] ?? null;
+  const primarySuggestedLayoff = suggestedLayoffs[0] ?? null;
 
   return (
     <main className="page-shell">
@@ -960,7 +1003,7 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
                         <p className="muted-copy">Selecting a card reveals possible plays for sets, runs, or discard.</p>
                   ) : (
                     <>
-                      {suggestedMelds.length > 0 ? (
+                      {suggestedMelds.length > 0 || suggestedLayoffs.length > 0 ? (
                         <div className="suggestion-list">
                           {suggestedMelds.map((suggestion) => (
                             <div className="suggestion-card" key={`${selectedCard.id}-${suggestion.kind}`}>
@@ -977,9 +1020,24 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
                               ) : null}
                             </div>
                           ))}
+                          {suggestedLayoffs.map((suggestion) => (
+                            <div className="suggestion-card" key={`${selectedCard.id}-layoff-${suggestion.meldIndex}`}>
+                              <strong>{suggestion.kind === "set" ? "Lay off on set" : "Lay off on run"}</strong>
+                              <p>{suggestion.targetCards.map((card) => cardLabel(card)).join(" · ")}</p>
+                              {canMeld ? (
+                                <button
+                                  className="button button-secondary"
+                                  onClick={() => startTransition(() => void playLayoff(suggestion.meldIndex, suggestion.card.id))}
+                                  type="button"
+                                >
+                                  Lay off card
+                                </button>
+                              ) : null}
+                            </div>
+                          ))}
                         </div>
                       ) : (
-                        <p className="muted-copy">No meld found for this card yet.</p>
+                        <p className="muted-copy">No meld or layoff found for this card yet.</p>
                       )}
                       {canDiscard ? (
                         <button
@@ -1121,7 +1179,7 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
                       <span className="stat-pill">{hand.length} cards</span>
                     </div>
 
-                    {selectedCard && suggestedMelds.length > 0 ? (
+                    {selectedCard && suggestedMelds.length + suggestedLayoffs.length > 0 ? (
                       <div className="suggestion-table-strip">
                         {suggestedMelds.map((suggestion) => (
                           <div className="suggestion-card" key={`table-${suggestion.kind}`}>
@@ -1138,17 +1196,42 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
                             ) : null}
                           </div>
                         ))}
+                        {suggestedLayoffs.map((suggestion) => (
+                          <div className="suggestion-card" key={`table-layoff-${suggestion.meldIndex}`}>
+                            <strong>{suggestion.kind === "set" ? "Lay off on set" : "Lay off on run"}</strong>
+                            <p>{suggestion.targetCards.map((card) => cardLabel(card)).join(" · ")}</p>
+                            {canMeld ? (
+                              <button
+                                className="button button-secondary"
+                                onClick={() => startTransition(() => void playLayoff(suggestion.meldIndex, suggestion.card.id))}
+                                type="button"
+                              >
+                                Lay off card
+                              </button>
+                            ) : null}
+                          </div>
+                        ))}
                       </div>
                     ) : null}
 
                     <div className="desktop-action-row">
                       <button
                         className="button"
-                        disabled={!canMeld || !selectedCard || suggestedMelds.length === 0}
-                        onClick={() => startTransition(() => void playSuggestedMeld(suggestedMelds[0].cards.map((card) => card.id)))}
+                        disabled={!canMeld || !selectedCard || (!primarySuggestedMeld && !primarySuggestedLayoff)}
+                        onClick={() =>
+                          startTransition(() => {
+                            if (primarySuggestedMeld) {
+                              return void playSuggestedMeld(primarySuggestedMeld.cards.map((card) => card.id));
+                            }
+
+                            if (primarySuggestedLayoff) {
+                              return void playLayoff(primarySuggestedLayoff.meldIndex, primarySuggestedLayoff.card.id);
+                            }
+                          })
+                        }
                         type="button"
                       >
-                        Meld
+                        {primarySuggestedLayoff && !primarySuggestedMeld ? "Lay off" : "Meld"}
                       </button>
                       <button
                         className="button button-secondary"
@@ -1362,7 +1445,7 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
             <div className="mobile-bottom-area">
               <div className="mobile-prompt">
                 <p>{mobilePrompt}</p>
-                {selectedCard && suggestedMelds.length > 0 ? (
+                {selectedCard && suggestedMelds.length + suggestedLayoffs.length > 0 ? (
                   <div className="mobile-suggestion-actions">
                     {suggestedMelds.map((suggestion) => (
                       <button
@@ -1372,6 +1455,16 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
                         type="button"
                       >
                         Play {suggestion.kind}
+                      </button>
+                    ))}
+                    {suggestedLayoffs.map((suggestion) => (
+                      <button
+                        className="button button-secondary"
+                        key={`mobile-layoff-${suggestion.meldIndex}`}
+                        onClick={() => startTransition(() => void playLayoff(suggestion.meldIndex, suggestion.card.id))}
+                        type="button"
+                      >
+                        Lay off on {suggestion.kind}
                       </button>
                     ))}
                   </div>
@@ -1394,12 +1487,22 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
               <div className="mobile-action-row">
                 <button
                   className="button mobile-icon-button"
-                  disabled={!canMeld || !selectedCard || suggestedMelds.length === 0}
-                  onClick={() => startTransition(() => void playSuggestedMeld(suggestedMelds[0].cards.map((card) => card.id)))}
+                  disabled={!canMeld || !selectedCard || (!primarySuggestedMeld && !primarySuggestedLayoff)}
+                  onClick={() =>
+                    startTransition(() => {
+                      if (primarySuggestedMeld) {
+                        return void playSuggestedMeld(primarySuggestedMeld.cards.map((card) => card.id));
+                      }
+
+                      if (primarySuggestedLayoff) {
+                        return void playLayoff(primarySuggestedLayoff.meldIndex, primarySuggestedLayoff.card.id);
+                      }
+                    })
+                  }
                   type="button"
                 >
                   <span>♣</span>
-                  <small>Meld</small>
+                  <small>{primarySuggestedLayoff && !primarySuggestedMeld ? "Lay off" : "Meld"}</small>
                 </button>
                 <button
                   className="button button-secondary mobile-icon-button"
