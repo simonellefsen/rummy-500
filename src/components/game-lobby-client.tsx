@@ -77,6 +77,28 @@ const CARDMEISTER_SUITS: Record<Exclude<Card["suit"], null>, string> = {
   hearts: "h",
   spades: "s"
 };
+const RANK_ORDER: Record<Card["rank"], number> = {
+  A: 1,
+  "2": 2,
+  "3": 3,
+  "4": 4,
+  "5": 5,
+  "6": 6,
+  "7": 7,
+  "8": 8,
+  "9": 9,
+  "10": 10,
+  J: 11,
+  Q: 12,
+  K: 13,
+  JOKER: 14
+};
+const SUIT_ORDER: Record<Exclude<Card["suit"], null>, number> = {
+  clubs: 0,
+  spades: 1,
+  hearts: 2,
+  diamonds: 3
+};
 
 function decodeJwtClaims(token: string) {
   try {
@@ -224,6 +246,32 @@ function StockCardBack() {
   );
 }
 
+function sortHandCards(hand: Card[], mode: "natural" | "rank" | "suit") {
+  if (mode === "natural") {
+    return hand;
+  }
+
+  return [...hand].sort((left, right) => {
+    if (mode === "rank") {
+      const rankDelta = RANK_ORDER[left.rank] - RANK_ORDER[right.rank];
+
+      if (rankDelta !== 0) {
+        return rankDelta;
+      }
+
+      return (SUIT_ORDER[left.suit ?? "clubs"] ?? 99) - (SUIT_ORDER[right.suit ?? "clubs"] ?? 99);
+    }
+
+    const suitDelta = (SUIT_ORDER[left.suit ?? "clubs"] ?? 99) - (SUIT_ORDER[right.suit ?? "clubs"] ?? 99);
+
+    if (suitDelta !== 0) {
+      return suitDelta;
+    }
+
+    return RANK_ORDER[left.rank] - RANK_ORDER[right.rank];
+  });
+}
+
 export function GameLobbyClient({ gameId }: { gameId: string }) {
   const [session, setSession] = useState<Session | null>(null);
   const [game, setGame] = useState<GameRow | null>(null);
@@ -237,6 +285,7 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [startGameDiagnostics, setStartGameDiagnostics] = useState<StartGameDiagnostics | null>(null);
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
+  const [handSortMode, setHandSortMode] = useState<"natural" | "rank" | "suit">("rank");
   const [isPending, startTransition] = useTransition();
 
   useEffect(() => {
@@ -695,6 +744,7 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
 
   const currentUser = session?.user ?? null;
   const currentPlayer = players.find((player) => player.user_id === currentUser?.id) ?? null;
+  const otherPlayers = players.filter((player) => player.user_id !== currentUser?.id);
   const isCurrentTurn = !!currentUser && game?.turn_user_id === currentUser.id && round?.status === "active";
   const canDraw = isCurrentTurn && game?.turn_stage === "awaiting_draw";
   const canMeld = isCurrentTurn && game?.turn_stage === "awaiting_discard";
@@ -702,6 +752,7 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
   const activeTurnLabel = game?.turn_user_id ? userLabel(game.turn_user_id, profiles, currentUser) : "Not started";
   const currentSeatIndex = currentPlayer?.seat_index ?? 0;
   const selectedCard = hand.find((card) => card.id === selectedCardId) ?? null;
+  const sortedHand = sortHandCards(hand, handSortMode);
   const suggestedMelds = selectedCard ? findSuggestedMelds(hand, selectedCard.id) : [];
   const tableSets = (round?.table_melds ?? []).filter((meld) => meld.type === "set");
   const tableRuns = (round?.table_melds ?? []).filter((meld) => meld.type === "run");
@@ -714,6 +765,18 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
     players.every((player) => player.ready);
   const discardTop = round?.discard_pile?.at(-1) ?? null;
   const discardCount = round?.discard_pile?.length ?? 0;
+  const mobileTopPlayer = otherPlayers[0] ?? null;
+  const mobileLeftPlayer = otherPlayers[1] ?? null;
+  const mobileRightPlayer = otherPlayers[2] ?? null;
+  const mobilePrompt = statusMessage
+    ? statusMessage
+    : canDraw
+      ? "It's your turn. Start by drawing a card from the stock or the discard pile."
+      : canMeld
+        ? selectedCard && suggestedMelds.length > 0
+          ? "Selected card can form a meld. Play it or discard another card."
+          : "It's your turn. Select a card to see meld options, or pick a card to discard."
+        : `${activeTurnLabel} is up next.`;
 
   return (
     <main className="page-shell">
@@ -752,7 +815,7 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
         </section>
       ) : (
         <>
-          <section className="table-layout-shell">
+          <section className="table-layout-shell desktop-only">
             <aside className="panel table-sidebar">
               <div className="section-heading">
                 <div>
@@ -991,7 +1054,7 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
 
                     <div className="hand-fan">
                       {hand.length > 0 ? (
-                        hand.map((card) => (
+                        sortedHand.map((card) => (
                           <button
                             className="hand-playing-card"
                             key={card.id}
@@ -1011,7 +1074,172 @@ export function GameLobbyClient({ gameId }: { gameId: string }) {
             </section>
           </section>
 
-          <section className="grid lobby-grid">
+          <section className="mobile-game-shell mobile-only">
+            <div className="mobile-topbar">
+              <Link className="mobile-menu-link" href="/">
+                Back
+              </Link>
+              <div className="mobile-title-lockup">
+                <h2>Rummy 500</h2>
+                <span>{activeTurnLabel}</span>
+              </div>
+              <button
+                className="button button-ghost mobile-refresh"
+                onClick={() => startTransition(() => void refreshLobby())}
+                type="button"
+              >
+                Refresh
+              </button>
+            </div>
+
+            {mobileTopPlayer ? (
+              <div className={`mobile-seat top ${game?.turn_user_id === mobileTopPlayer.user_id ? "is-active" : ""}`}>
+                <strong>{userLabel(mobileTopPlayer.user_id, profiles, currentUser)}</strong>
+                <div className="mobile-back-stack">
+                  <StockCardBack />
+                  <StockCardBack />
+                  <StockCardBack />
+                </div>
+              </div>
+            ) : null}
+
+            <div className="mobile-table-zone">
+              {mobileLeftPlayer ? (
+                <div className={`mobile-seat side left ${game?.turn_user_id === mobileLeftPlayer.user_id ? "is-active" : ""}`}>
+                  <div className="mobile-side-stack">
+                    <StockCardBack />
+                    <StockCardBack />
+                    <StockCardBack />
+                  </div>
+                  <strong>{userLabel(mobileLeftPlayer.user_id, profiles, currentUser)}</strong>
+                </div>
+              ) : null}
+
+              <div className="mobile-center-table">
+                <div className="mobile-meld-lane">
+                  {tableSets.slice(0, 1).map((meld, index) => (
+                    <div className="mobile-meld-stack" key={`mobile-set-${index}`}>
+                      {(meld.cards ?? []).map((card) => (
+                        <PlayingCardFace card={card} key={card.id} size="tiny" />
+                      ))}
+                    </div>
+                  ))}
+                  {tableRuns.slice(0, 1).map((meld, index) => (
+                    <div className="mobile-meld-stack" key={`mobile-run-${index}`}>
+                      {(meld.cards ?? []).map((card) => (
+                        <PlayingCardFace card={card} key={card.id} size="tiny" />
+                      ))}
+                    </div>
+                  ))}
+                </div>
+
+                <div className="mobile-pile-row">
+                  <button
+                    className="mobile-pile-button"
+                    disabled={!canDraw || isPending || round?.stock_count === 0}
+                    onClick={() => startTransition(() => void playTurnAction("draw_stock"))}
+                    type="button"
+                  >
+                    <StockCardBack />
+                    <span>Stock</span>
+                  </button>
+
+                  <button
+                    className="mobile-pile-button"
+                    disabled={!canDraw || isPending || discardCount === 0}
+                    onClick={() => startTransition(() => void playTurnAction("draw_discard_top"))}
+                    type="button"
+                  >
+                    {discardTop ? <PlayingCardFace card={discardTop} size="mini" /> : <div className="pile-stack">Empty</div>}
+                    <span>Discard</span>
+                  </button>
+                </div>
+              </div>
+
+              {mobileRightPlayer ? (
+                <div className={`mobile-seat side right ${game?.turn_user_id === mobileRightPlayer.user_id ? "is-active" : ""}`}>
+                  <div className="mobile-side-stack">
+                    <StockCardBack />
+                    <StockCardBack />
+                    <StockCardBack />
+                  </div>
+                  <strong>{userLabel(mobileRightPlayer.user_id, profiles, currentUser)}</strong>
+                </div>
+              ) : null}
+            </div>
+
+            <div className="mobile-bottom-area">
+              <div className="mobile-prompt">
+                <p>{mobilePrompt}</p>
+                {selectedCard && suggestedMelds.length > 0 ? (
+                  <div className="mobile-suggestion-actions">
+                    {suggestedMelds.map((suggestion) => (
+                      <button
+                        className="button button-secondary"
+                        key={`mobile-${suggestion.kind}`}
+                        onClick={() => startTransition(() => void playSuggestedMeld(suggestion.cards.map((card) => card.id)))}
+                        type="button"
+                      >
+                        Play {suggestion.kind}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+
+              <div className="mobile-hand-scroll">
+                {sortedHand.map((card) => (
+                  <button
+                    className="mobile-hand-card-button"
+                    key={card.id}
+                    onClick={() => setSelectedCardId((currentSelected) => (currentSelected === card.id ? null : card.id))}
+                    type="button"
+                  >
+                    <PlayingCardFace card={card} selected={selectedCardId === card.id} size="hand" />
+                  </button>
+                ))}
+              </div>
+
+              <div className="mobile-action-row">
+                <button
+                  className="button"
+                  disabled={!canMeld || !selectedCard || suggestedMelds.length === 0}
+                  onClick={() => startTransition(() => void playSuggestedMeld(suggestedMelds[0].cards.map((card) => card.id)))}
+                  type="button"
+                >
+                  Meld selected
+                </button>
+                <button
+                  className="button button-secondary"
+                  disabled={!canDiscard || !selectedCard}
+                  onClick={() => startTransition(() => void playTurnAction("discard_card", selectedCard?.id))}
+                  type="button"
+                >
+                  Discard selected
+                </button>
+                <button
+                  className="button button-ghost"
+                  onClick={() =>
+                    setHandSortMode((currentSortMode) =>
+                      currentSortMode === "rank" ? "suit" : currentSortMode === "suit" ? "natural" : "rank"
+                    )
+                  }
+                  type="button"
+                >
+                  Sort hand
+                </button>
+              </div>
+
+              {currentPlayer ? (
+                <div className={`mobile-seat self ${isCurrentTurn ? "is-active" : ""}`}>
+                  <strong>{userLabel(currentPlayer.user_id, profiles, currentUser)}</strong>
+                  <span>{game?.turn_stage === "awaiting_draw" ? "Draw phase" : "Play / discard"}</span>
+                </div>
+              ) : null}
+            </div>
+          </section>
+
+          <section className="grid lobby-grid audit-section">
             <article className="panel">
               <div className="section-heading">
                 <div>
