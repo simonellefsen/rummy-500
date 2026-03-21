@@ -577,12 +577,20 @@ a {
   backdrop-filter: blur(8px);
   display: grid;
   align-items: start;
-  padding: 1rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding: 1rem 1rem calc(1rem + env(safe-area-inset-bottom, 0px));
 }
 
 .mobile-settings-sheet {
   display: grid;
   gap: 1rem;
+  width: min(100%, 56rem);
+  max-height: calc(100dvh - 2rem - env(safe-area-inset-bottom, 0px));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
   border-radius: 28px;
   border: 1px solid rgba(243, 239, 223, 0.12);
   background: rgba(7, 21, 30, 0.96);
@@ -595,6 +603,11 @@ a {
   justify-content: space-between;
   gap: 1rem;
   align-items: flex-start;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding-bottom: 0.35rem;
+  background: rgba(7, 21, 30, 0.96);
 }
 
 .mobile-settings-head h3 {
